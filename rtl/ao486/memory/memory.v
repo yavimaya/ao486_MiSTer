@@ -141,159 +141,22 @@ module memory(
     output      [31:2]  avm_address,
     output      [31:0]  avm_writedata,
     output      [3:0]   avm_byteenable,
-    output      [2:0]   avm_burstcount,
+    output      [3:0]   avm_burstcount,
     output              avm_write,
     output              avm_read,
     
     input               avm_waitrequest,
     input               avm_readdatavalid,
-    input       [31:0]  avm_readdata
-);
-
-
-//------------------------------------------------------------------------------
-
-wire        req_writeburst_do;
-wire        req_writeburst_done;
-wire [31:0] req_writeburst_address;
-wire [1:0]  req_writeburst_dword_length;
-wire [3:0]  req_writeburst_byteenable_0;
-wire [3:0]  req_writeburst_byteenable_1;
-wire [55:0] req_writeburst_data;
-
-wire        resp_writeburst_do;
-wire        resp_writeburst_done;
-wire [31:0] resp_writeburst_address;
-wire [1:0]  resp_writeburst_dword_length;
-wire [3:0]  resp_writeburst_byteenable_0;
-wire [3:0]  resp_writeburst_byteenable_1;
-wire [55:0] resp_writeburst_data;
-
-link_writeburst link_writeburst_inst(
-    .clk                            (clk),
-    .rst_n                          (rst_n),
+    input       [31:0]  avm_readdata,
     
-    // writeburst REQ
-    .req_writeburst_do              (req_writeburst_do),            //input
-    .req_writeburst_done            (req_writeburst_done),          //output
-    
-    .req_writeburst_address         (req_writeburst_address),       //input [31:0]
-    .req_writeburst_dword_length    (req_writeburst_dword_length),  //input [1:0]
-    .req_writeburst_byteenable_0    (req_writeburst_byteenable_0),  //input [3:0]
-    .req_writeburst_byteenable_1    (req_writeburst_byteenable_1),  //input [3:0]
-    .req_writeburst_data            (req_writeburst_data),          //input [55:0]
-    
-    // writeburst RESP
-    .resp_writeburst_do             (resp_writeburst_do),           //output
-    .resp_writeburst_done           (resp_writeburst_done),         //input
-    
-    .resp_writeburst_address        (resp_writeburst_address),      //output [31:0]
-    .resp_writeburst_dword_length   (resp_writeburst_dword_length), //output [1:0]
-    .resp_writeburst_byteenable_0   (resp_writeburst_byteenable_0), //output [3:0]
-    .resp_writeburst_byteenable_1   (resp_writeburst_byteenable_1), //output [3:0]
-    .resp_writeburst_data           (resp_writeburst_data)          //output [55:0]
-);
-
-//------------------------------------------------------------------------------
-
-wire         req_writeline_do;
-wire         req_writeline_done;
-wire [31:0]  req_writeline_address;
-wire [127:0] req_writeline_line;
-    
-wire         resp_writeline_do;
-wire         resp_writeline_done;
-wire [31:0]  resp_writeline_address;
-wire [127:0] resp_writeline_line;
-
-link_writeline link_writeline_inst(
-    .clk                (clk),
-    .rst_n              (rst_n),
-    
-    // writeline REQ
-    .req_writeline_do       (req_writeline_do),         //input
-    .req_writeline_done     (req_writeline_done),       //output
-    
-    .req_writeline_address  (req_writeline_address),    //input [31:0]
-    .req_writeline_line     (req_writeline_line),       //input [127:0]
-    
-    // writeline RESP
-    .resp_writeline_do      (resp_writeline_do),        //output
-    .resp_writeline_done    (resp_writeline_done),      //input
-    
-    .resp_writeline_address (resp_writeline_address),   //output [31:0]
-    .resp_writeline_line    (resp_writeline_line)       //output [127:0]
-);
-
-//------------------------------------------------------------------------------
-
-wire         req_readburst_do;
-wire         req_readburst_done;
-wire [31:0]  req_readburst_address;
-wire [1:0]   req_readburst_dword_length;
-wire [3:0]   req_readburst_byte_length;
-wire [95:0]  req_readburst_data;
-
-wire         resp_readburst_do;
-wire         resp_readburst_done;
-wire [31:0]  resp_readburst_address;
-wire [1:0]   resp_readburst_dword_length;
-wire [3:0]   resp_readburst_byte_length;
-wire [95:0]  resp_readburst_data;
-
-link_readburst link_readburst_inst(
-    .clk                    (clk),
-    .rst_n                  (rst_n),
-    
-    // readburst REQ
-    .req_readburst_do               (req_readburst_do),             //input
-    .req_readburst_done             (req_readburst_done),           //output
-    
-    .req_readburst_address          (req_readburst_address),        //input [31:0]
-    .req_readburst_dword_length     (req_readburst_dword_length),   //input [1:0]
-    .req_readburst_byte_length      (req_readburst_byte_length),    //input [11:0]
-    .req_readburst_data             (req_readburst_data),           //output [95:0]
-    
-    // readburst RESP
-    .resp_readburst_do              (resp_readburst_do),            //output
-    .resp_readburst_done            (resp_readburst_done),          //input
-    
-    .resp_readburst_address         (resp_readburst_address),       //output [31:0]
-    .resp_readburst_dword_length    (resp_readburst_dword_length),  //output [1:0]
-    .resp_readburst_byte_length     (resp_readburst_byte_length),   //output [3:0]
-    .resp_readburst_data            (resp_readburst_data)           //input [95:0]
-);
-
-//------------------------------------------------------------------------------
-
-
-wire         req_readline_do;
-wire         req_readline_done;
-wire [31:0]  req_readline_address;
-wire [127:0] req_readline_line;
-    
-wire         resp_readline_do;
-wire         resp_readline_done;
-wire [31:0]  resp_readline_address;
-wire [127:0] resp_readline_line;
-
-link_readline link_readline_inst(
-    .clk                    (clk),
-    .rst_n                  (rst_n),
-    
-    // readline REQ
-    .req_readline_do        (req_readline_do),      //input
-    .req_readline_done      (req_readline_done),    //output
-    
-    .req_readline_address   (req_readline_address), //input [31:0]
-    .req_readline_line      (req_readline_line),    //output [127:0]
-    
-    // readline RESP
-    .resp_readline_do       (resp_readline_do),     //output
-    .resp_readline_done     (resp_readline_done),   //input
-    
-    .resp_readline_address  (resp_readline_address),//output [31:0]
-    .resp_readline_line     (resp_readline_line)    //input [127:0]
+    input       [23:0]  dma_address,
+    input               dma_write,
+    input       [31:0]  dma_writedata,
+    input       [3:0]   dma_byteenable,
+    input               dma_read,
+    output      [31:0]  dma_readdata,
+    output              dma_readdatavalid,
+    output              dma_waitrequest
 );
 
 //------------------------------------------------------------------------------
@@ -301,39 +164,7 @@ link_readline link_readline_inst(
 wire         req_readcode_do;
 wire         req_readcode_done;
 wire [31:0]  req_readcode_address;
-wire [127:0] req_readcode_line;
 wire [31:0]  req_readcode_partial;
-wire         req_readcode_partial_done;
-    
-wire         resp_readcode_do;
-wire         resp_readcode_done;
-wire [31:0]  resp_readcode_address;
-wire [127:0] resp_readcode_line;
-wire [31:0]  resp_readcode_partial;
-wire         resp_readcode_partial_done;
-
-link_readcode link_readcode_inst(
-    .clk                (clk),
-    .rst_n              (rst_n),
-    
-    // readcode REQ
-    .req_readcode_do                (req_readcode_do),            //input
-    .req_readcode_done              (req_readcode_done),          //output
-    
-    .req_readcode_address           (req_readcode_address),       //input [31:0]
-    .req_readcode_line              (req_readcode_line),          //output [127:0]
-    .req_readcode_partial           (req_readcode_partial),       //output [31:0]
-    .req_readcode_partial_done      (req_readcode_partial_done),  //output
-    
-    // readcode RESP
-    .resp_readcode_do               (resp_readcode_do),           //output
-    .resp_readcode_done             (resp_readcode_done),         //input
-    
-    .resp_readcode_address          (resp_readcode_address),      //output [31:0]
-    .resp_readcode_line             (resp_readcode_line),         //input [127:0]
-    .resp_readcode_partial          (resp_readcode_partial),      //input [31:0]
-    .resp_readcode_partial_done     (resp_readcode_partial_done)  //input
-);
 
 //------------------------------------------------------------------------------
 
@@ -451,26 +282,14 @@ wire [31:0]  tlbwrite_data;
 
 //------------------------------------------------------------------------------
 
-wire        dcachetoicache_write_do;
-wire [31:0] dcachetoicache_write_address;
-
-//------------------------------------------------------------------------------
-
-wire        dcachetoicache_accept_do;
-wire [31:0] dcachetoicache_accept_address;
-wire        dcachetoicache_accept_empty;
-
-//------------------------------------------------------------------------------
-
 wire        icacheread_do;
 wire [31:0] icacheread_address;
 wire [4:0]  icacheread_length; // takes into account: page size and cs segment limit
-wire        icacheread_cache_disable;
 
 //------------------------------------------------------------------------------
 
 wire            prefetchfifo_write_do;
-wire [135:0]    prefetchfifo_write_data;
+wire [35:0]    prefetchfifo_write_data;
 
 //------------------------------------------------------------------------------
 
@@ -504,6 +323,11 @@ wire            tlbcode_cache_disable;
 
 //------------------------------------------------------------------------------
 
+wire [27:2]     snoop_addr;
+wire [31:0]     snoop_data;
+wire  [3:0]     snoop_be;
+wire            snoop_we;
+
 //------------------------------------------------------------------------------
 
 avalon_mem avalon_mem_inst(
@@ -512,168 +336,64 @@ avalon_mem avalon_mem_inst(
     .rst_n                      (rst_n),
     
     //RESP:
-    .writeburst_do              (resp_writeburst_do),           //input
-    .writeburst_done            (resp_writeburst_done),         //output
+    .writeburst_do              (resp_dcachewrite_do),          //input
+    .writeburst_done            (resp_dcachewrite_done),        //output
     
-    .writeburst_address         (resp_writeburst_address),      //input [31:0]
-    .writeburst_dword_length    (resp_writeburst_dword_length), //input [1:0]
-    .writeburst_byteenable_0    (resp_writeburst_byteenable_0), //input [3:0]
-    .writeburst_byteenable_1    (resp_writeburst_byteenable_1), //input [3:0]
-    .writeburst_data            (resp_writeburst_data),         //input [55:0]
+    .writeburst_address         (resp_dcachewrite_address),     //input [31:0]
+    .writeburst_length          (resp_dcachewrite_length),      //input [2:0]
+    .writeburst_data_in         (resp_dcachewrite_data),        //input [31:0]
     //END
     
     //RESP:
-    .writeline_do               (resp_writeline_do),            //input
-    .writeline_done             (resp_writeline_done),          //output
+    .readburst_do               (resp_dcacheread_do),           //input
+    .readburst_done             (resp_dcacheread_done),         //output
     
-    .writeline_address          (resp_writeline_address),       //input [31:0]
-    .writeline_line             (resp_writeline_line),          //input [127:0]
+    .readburst_address          (resp_dcacheread_address),      //input  [31:0]
+    .readburst_length           (resp_dcacheread_length),       //input  [3:0]
+    .readburst_data_out         (resp_dcacheread_data),         //output [63:0]
     //END
-    
-    //RESP:
-    .readburst_do               (resp_readburst_do),            //input
-    .readburst_done             (resp_readburst_done),          //output
-    
-    .readburst_address          (resp_readburst_address),       //input  [31:0]
-    .readburst_dword_length     (resp_readburst_dword_length),  //input  [1:0]
-    .readburst_byte_length      (resp_readburst_byte_length),   //input [3:0]
-    .readburst_data             (resp_readburst_data),          //output [95:0]
-    //END
-    
-    //RESP:
-    .readline_do                (resp_readline_do),             //input
-    .readline_done              (resp_readline_done),           //output
-    
-    .readline_address           (resp_readline_address),        //input [31:0]
-    .readline_line              (resp_readline_line),           //output [127:0]
-    //END
-    
-    //RESP:
-    .readcode_do                (resp_readcode_do),             //input
-    .readcode_done              (resp_readcode_done),           //output
 
-    .readcode_address           (resp_readcode_address),        //input [31:0]
-    .readcode_line              (resp_readcode_line),           //output [127:0]
-    .readcode_partial           (resp_readcode_partial),        //output [31:0]
-    .readcode_partial_done      (resp_readcode_partial_done),   //output
+    //RESP:
+    .readcode_do                (req_readcode_do),             //input
+    .readcode_done              (req_readcode_done),           //output
+                                   
+    .readcode_address           (req_readcode_address),        //input [31:0]
+    .readcode_partial           (req_readcode_partial),        //output [31:0]
     //END
+    
+    .snoop_addr                 (snoop_addr),
+    .snoop_data                 (snoop_data),
+    .snoop_be                   (snoop_be),  
+    .snoop_we                   (snoop_we),
     
     // avalon master
     .avm_address                (avm_address),                  //output [31:0]
     .avm_writedata              (avm_writedata),                //output [31:0]
     .avm_byteenable             (avm_byteenable),               //output [3:0]
-    .avm_burstcount             (avm_burstcount),               //output [2:0]
+    .avm_burstcount             (avm_burstcount),               //output [3:0]
     .avm_write                  (avm_write),                    //output
     .avm_read                   (avm_read),                     //output
-    
     .avm_waitrequest            (avm_waitrequest),              //input
     .avm_readdatavalid          (avm_readdatavalid),            //input
-    .avm_readdata               (avm_readdata)                  //input [31:0]
+    .avm_readdata               (avm_readdata),                 //input [31:0]
+
+    .dma_address                (dma_address),
+    .dma_write                  (dma_write),
+    .dma_writedata              (dma_writedata),
+    .dma_byteenable             (dma_byteenable),
+    .dma_read                   (dma_read),
+    .dma_readdata               (dma_readdata),
+    .dma_readdatavalid          (dma_readdatavalid),
+    .dma_waitrequest            (dma_waitrequest)
 );
 
 //------------------------------------------------------------------------------
 
-dcache dcache_inst(
-    // global
-    .clk                (clk),
-    .rst_n              (rst_n),
-    
-    //RESP:
-    .dcacheread_do              (resp_dcacheread_do),              //input
-    .dcacheread_done            (resp_dcacheread_done),            //output
-    
-    .dcacheread_length          (resp_dcacheread_length),          //input [3:0]
-    .dcacheread_cache_disable   (resp_dcacheread_cache_disable),   //input
-    .dcacheread_address         (resp_dcacheread_address),         //input [31:0]
-    .dcacheread_data            (resp_dcacheread_data),            //output [63:0]
-    //END
-    
-    //RESP:
-    .dcachewrite_do                 (resp_dcachewrite_do),                 //input
-    .dcachewrite_done               (resp_dcachewrite_done),               //output
-    
-    .dcachewrite_length             (resp_dcachewrite_length),             //input [2:0]
-    .dcachewrite_cache_disable      (resp_dcachewrite_cache_disable),      //input
-    .dcachewrite_address            (resp_dcachewrite_address),            //input [31:0]
-    .dcachewrite_write_through      (resp_dcachewrite_write_through),      //input
-    .dcachewrite_data               (resp_dcachewrite_data),               //input [31:0]
-    //END
-    
-    //REQ:
-    .readline_do            (req_readline_do),      //output
-    .readline_done          (req_readline_done),    //input
-    
-    .readline_address       (req_readline_address),   //output [31:0]
-    .readline_line          (req_readline_line),      //input [127:0]
-    //END
-    
-    //REQ:
-    .readburst_do               (req_readburst_do),             //output
-    .readburst_done             (req_readburst_done),           //input
-    
-    .readburst_address          (req_readburst_address),        //output [31:0]
-    .readburst_dword_length     (req_readburst_dword_length),   //output [1:0]
-    .readburst_byte_length      (req_readburst_byte_length),    //output [3:0]
-    .readburst_data             (req_readburst_data),           //input [95:0]
-    //END
-    
-    //REQ:
-    .writeline_do               (req_writeline_do),         //output
-    .writeline_done             (req_writeline_done),       //input
-    
-    .writeline_address          (req_writeline_address),    //output [31:0]
-    .writeline_line             (req_writeline_line),       //output [127:0]
-    //END
-    
-    //REQ:
-    .writeburst_do              (req_writeburst_do),            //output
-    .writeburst_done            (req_writeburst_done),          //input
-    
-    .writeburst_address         (req_writeburst_address),       //output [31:0]
-    .writeburst_dword_length    (req_writeburst_dword_length),  //output [1:0]
-    .writeburst_byteenable_0    (req_writeburst_byteenable_0),  //output [3:0]
-    .writeburst_byteenable_1    (req_writeburst_byteenable_1),  //output [3:0]
-    .writeburst_data            (req_writeburst_data),          //output [55:0]
-    //END
-    
-    .dcachetoicache_write_do        (dcachetoicache_write_do),         //output
-    .dcachetoicache_write_address   (dcachetoicache_write_address),    //output [31:0]
-                   
-                   
-    //RESP:
-    .invddata_do        (invddata_do),        //input
-    .invddata_done      (invddata_done),      //output
-    //END
-    
-    //RESP:
-    .wbinvddata_do      (wbinvddata_do),      //input
-    .wbinvddata_done    (wbinvddata_done),    //output
-    //END
-    
-    .dcache_busy        (dcache_busy)           //output
-);
+assign invddata_done = 1'b1;
+assign wbinvddata_done = 1'b1;
+assign dcache_busy = 1'b0;
 
 //------------------------------------------------------------------------------
-
-dcache_to_icache_fifo dcache_to_icache_fifo_inst(
-    .clk            (clk),
-    .rst_n          (rst_n),
-    
-    //RESP:
-    .dcachetoicache_write_do        (dcachetoicache_write_do),        //input
-    .dcachetoicache_write_address   (dcachetoicache_write_address),   //input [31:0]
-    //END
-    
-    
-    //RESP:
-    .dcachetoicache_accept_do       (dcachetoicache_accept_do),       //input
-    .dcachetoicache_accept_address  (dcachetoicache_accept_address),  //output [31:0]
-    .dcachetoicache_accept_empty    (dcachetoicache_accept_empty)     //output
-    //END
-);
-
-//------------------------------------------------------------------------------
-
 icache icache_inst(
     .clk            (clk),
     .rst_n          (rst_n),
@@ -686,39 +406,32 @@ icache icache_inst(
     .icacheread_do              (icacheread_do),              //input
     .icacheread_address         (icacheread_address),         //input [31:0]
     .icacheread_length          (icacheread_length),          //input [4:0] // takes into account: page size and cs segment limit
-    .icacheread_cache_disable   (icacheread_cache_disable),   //input
     
     //REQ:
     .readcode_do                (req_readcode_do),              //output
     .readcode_done              (req_readcode_done),            //input
     
     .readcode_address           (req_readcode_address),         //output [31:0]
-    .readcode_line              (req_readcode_line),            //input [127:0]
     .readcode_partial           (req_readcode_partial),         //input [31:0]
-    .readcode_partial_done      (req_readcode_partial_done),    //input
-    //END
-    
-    //REQ:
-    .dcachetoicache_accept_do       (dcachetoicache_accept_do),       //output
-    .dcachetoicache_accept_address  (dcachetoicache_accept_address),  //input [31:0]
-    .dcachetoicache_accept_empty    (dcachetoicache_accept_empty),    //input
     //END
     
     //REQ:
     .prefetchfifo_write_do      (prefetchfifo_write_do),      //output
-    .prefetchfifo_write_data    (prefetchfifo_write_data),    //output [135:0]
+    .prefetchfifo_write_data    (prefetchfifo_write_data),    //output [35:0]
     //END
     
     //REQ:
-    .prefetched_do      (prefetched_do),      //output
-    .prefetched_length  (prefetched_length),  //output [4:0]
+    .prefetched_do              (prefetched_do),      //output
+    .prefetched_length          (prefetched_length),  //output [4:0]
     //END
-                   
-    //RESP:
-    .invdcode_do        (invdcode_do),    //input
-    .invdcode_done      (invdcode_done)   //output
-    //END
+    
+    .snoop_addr                 (snoop_addr),
+    .snoop_data                 (snoop_data),
+    .snoop_be                   (snoop_be),  
+    .snoop_we                   (snoop_we)
 );
+
+assign invdcode_done = 1'b1;
 
 //------------------------------------------------------------------------------
 
@@ -848,7 +561,7 @@ prefetch_fifo prefetch_fifo_inst(
     
     //RESP:
     .prefetchfifo_write_do      (prefetchfifo_write_do),      //input
-    .prefetchfifo_write_data    (prefetchfifo_write_data),    //input [135:0]
+    .prefetchfifo_write_data    (prefetchfifo_write_data),    //input [35:0]
     //END
     
     .prefetchfifo_used   (prefetchfifo_used),    //output [4:0]
@@ -894,7 +607,7 @@ prefetch_control prefetch_control_inst(
     .icacheread_do              (icacheread_do),              //output
     .icacheread_address         (icacheread_address),         //output [31:0]
     .icacheread_length          (icacheread_length),          //output [4:0] // takes into account: page size and cs segment limit
-    .icacheread_cache_disable   (icacheread_cache_disable)    //output
+    .icacheread_cache_disable   ()                            //output
     //END
 );
 

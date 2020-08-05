@@ -309,105 +309,6 @@ wire [31:0] ss_limit;
 
 wire [31:0] ldtr_base;
 
-assign tr_base     = {   tr_cache[63:56],   tr_cache[39:16] };
-
-assign cs_base     = { cs_cache[63:56], cs_cache[39:16] };
-assign cs_limit    = cs_cache[`DESC_BIT_G]? { cs_cache[51:48], cs_cache[15:0], 12'hFFF } : { 12'd0, cs_cache[51:48], cs_cache[15:0] };
-
-assign es_base     = { es_cache[63:56], es_cache[39:16] };
-assign es_limit    = es_cache[`DESC_BIT_G]? { es_cache[51:48], es_cache[15:0], 12'hFFF } : { 12'd0, es_cache[51:48], es_cache[15:0] };
-
-assign ss_base     = { ss_cache[63:56], ss_cache[39:16] };
-assign ss_limit    = ss_cache[`DESC_BIT_G]? { ss_cache[51:48], ss_cache[15:0], 12'hFFF } : { 12'd0, ss_cache[51:48], ss_cache[15:0] };
-
-assign ldtr_base   = { ldtr_cache[63:56], ldtr_cache[39:16] };
-
-//------------------------------------------------------------------------------
-
-//------------------------------------------------------------------------------
-
-//------------------------------------------------------------------------------
-
-//------------------------------------------------------------------------------
-
-//------------------------------------------------------------------------------
-
-wire wr_ready;
-wire w_load;
-
-wire wr_waiting;
-
-wire wr_one_cycle_wait;
-
-//------------------------------------------------------------------------------
-
-assign wr_ready = ~(wr_waiting) && wr_cmd != `CMD_NULL; //NOTE: do not use: wr_mutex[`MUTEX_ACTIVE_BIT];
-
-assign wr_busy = wr_waiting || exc_init || wr_debug_prepare || wr_interrupt_possible_prepare || (wr_one_cycle_wait && wr_first_cycle);
-
-assign w_load = exe_ready;
-
-assign wr_is_front = wr_cmd != `CMD_NULL;
-
-//------------------------------------------------------------------------------
-
-wire wr_finished;
-
-wire wr_not_finished;
-wire wr_hlt_in_progress;
-wire wr_inhibit_interrupts_and_debug;
-wire wr_inhibit_interrupts;
-wire iflag_to_reg;
-
-wire wr_debug_prepare;
-wire wr_interrupt_possible_prepare;
-
-wire wr_clear_rflag;
-
-wire wr_string_in_progress;
-reg  wr_string_in_progress_last;
-
-assign wr_finished =
-    wr_ready && (~(wr_not_finished) || (wr_hlt_in_progress && iflag_to_reg && interrupt_do) || wr_string_in_progress);
-
-assign wr_interrupt_possible_prepare =
-    interrupt_do &&
-    wr_ready && (~(wr_not_finished) || wr_hlt_in_progress || wr_string_in_progress) &&
-    ~(wr_debug_prepare) &&
-    ~(wr_inhibit_interrupts_and_debug) && ~(wr_inhibit_interrupts) && iflag_to_reg;
-
-assign wr_clear_rflag = wr_finished && wr_eip <= cs_limit && ~(exc_init) && ~(wr_debug_prepare) && ~(wr_interrupt_possible_prepare);
-    
-always @(posedge clk) begin
-    if(rst_n == 1'b0)   wr_interrupt_possible <= `FALSE;
-    else if(wr_reset)   wr_interrupt_possible <= `FALSE;
-    else                wr_interrupt_possible <= wr_interrupt_possible_prepare;
-end
-
-always @(posedge clk) begin
-    if(rst_n == 1'b0)   wr_debug_init <= `FALSE;
-    else                wr_debug_init <= wr_debug_prepare;
-end
-
-always @(posedge clk) begin
-    if(rst_n == 1'b0)   wr_string_in_progress_last <= `FALSE;
-    else                wr_string_in_progress_last <= wr_string_in_progress;
-end
-
-assign wr_string_in_progress_final = wr_string_in_progress || ((wr_debug_init || wr_interrupt_possible) && wr_string_in_progress_last);
-
-//------------------------------------------------------------------------------
-
-reg wr_first_cycle;
-
-always @(posedge clk) begin
-    if(rst_n == 1'b0)   wr_first_cycle <= `FALSE;
-    else if(wr_reset)   wr_first_cycle <= `FALSE;
-    else if(w_load)     wr_first_cycle <= `TRUE;
-    else                wr_first_cycle <= `FALSE;
-end
-
-//------------------------------------------------------------------------------
 
 reg [15:0]  wr_decoder;
 reg         wr_operand_32bit;
@@ -440,171 +341,23 @@ reg         wr_arith_sub_carry;
 reg         wr_arith_sbb_carry;
 reg         wr_mult_overflow;
 
-always @(posedge clk) begin if(rst_n == 1'b0) wr_decoder              <= 16'd0;     else if(w_load) wr_decoder              <= exe_decoder[15:0];        end
-always @(posedge clk) begin if(rst_n == 1'b0) wr_eip                  <= 32'd0;     else if(w_load) wr_eip                  <= exe_eip_final;            end
-always @(posedge clk) begin if(rst_n == 1'b0) wr_operand_32bit        <= `FALSE;    else if(w_load) wr_operand_32bit        <= exe_operand_32bit;        end
-always @(posedge clk) begin if(rst_n == 1'b0) wr_address_32bit        <= `FALSE;    else if(w_load) wr_address_32bit        <= exe_address_32bit;        end
-always @(posedge clk) begin if(rst_n == 1'b0) wr_prefix_group_1_rep   <= 2'd0;      else if(w_load) wr_prefix_group_1_rep   <= exe_prefix_group_1_rep;   end
-always @(posedge clk) begin if(rst_n == 1'b0) wr_prefix_group_1_lock  <= `FALSE;    else if(w_load) wr_prefix_group_1_lock  <= exe_prefix_group_1_lock;  end
-always @(posedge clk) begin if(rst_n == 1'b0) wr_consumed             <= 4'd0;      else if(w_load) wr_consumed             <= exe_consumed_final;       end
-always @(posedge clk) begin if(rst_n == 1'b0) wr_is_8bit              <= `FALSE;    else if(w_load) wr_is_8bit              <= exe_is_8bit_final;        end
-always @(posedge clk) begin if(rst_n == 1'b0) wr_cmdex                <= 4'd0;      else if(w_load) wr_cmdex                <= exe_cmdex;                end
-always @(posedge clk) begin if(rst_n == 1'b0) wr_dst_is_reg           <= `FALSE;    else if(w_load) wr_dst_is_reg           <= exe_dst_is_reg;           end
-always @(posedge clk) begin if(rst_n == 1'b0) wr_dst_is_rm            <= `FALSE;    else if(w_load) wr_dst_is_rm            <= exe_dst_is_rm;            end
-always @(posedge clk) begin if(rst_n == 1'b0) wr_dst_is_memory        <= `FALSE;    else if(w_load) wr_dst_is_memory        <= exe_dst_is_memory;        end
-always @(posedge clk) begin if(rst_n == 1'b0) wr_dst_is_eax           <= `FALSE;    else if(w_load) wr_dst_is_eax           <= exe_dst_is_eax;           end
-always @(posedge clk) begin if(rst_n == 1'b0) wr_dst_is_edx_eax       <= `FALSE;    else if(w_load) wr_dst_is_edx_eax       <= exe_dst_is_edx_eax;       end
-always @(posedge clk) begin if(rst_n == 1'b0) wr_dst_is_implicit_reg  <= `FALSE;    else if(w_load) wr_dst_is_implicit_reg  <= exe_dst_is_implicit_reg;  end
-always @(posedge clk) begin if(rst_n == 1'b0) wr_linear               <= 32'd0;     else if(w_load) wr_linear               <= exe_linear;               end
+wire wr_finished;
 
-always @(posedge clk) begin if(rst_n == 1'b0) result                  <= 32'd0;     else if(w_load) result                  <= exe_result;               end
-always @(posedge clk) begin if(rst_n == 1'b0) result2                 <= 32'd0;     else if(w_load) result2                 <= exe_result2;              end
-always @(posedge clk) begin if(rst_n == 1'b0) result_push             <= 32'd0;     else if(w_load) result_push             <= exe_result_push;          end
-always @(posedge clk) begin if(rst_n == 1'b0) result_signals          <= 5'd0;      else if(w_load) result_signals          <= exe_result_signals;       end
+wire wr_not_finished;
+wire wr_hlt_in_progress;
+wire wr_inhibit_interrupts_and_debug;
+wire wr_inhibit_interrupts;
+wire iflag_to_reg;
 
-always @(posedge clk) begin if(rst_n == 1'b0) wr_arith_index          <= 4'd0;      else if(w_load) wr_arith_index          <= exe_arith_index;          end
-always @(posedge clk) begin if(rst_n == 1'b0) wr_src                  <= 32'd0;     else if(w_load) wr_src                  <= src_final;                end
-always @(posedge clk) begin if(rst_n == 1'b0) wr_dst                  <= 32'd0;     else if(w_load) wr_dst                  <= dst_final;                end
+wire wr_debug_prepare;
+wire wr_interrupt_possible_prepare;
 
-always @(posedge clk) begin if(rst_n == 1'b0) wr_arith_sub_carry      <= 1'd0;      else if(w_load) wr_arith_sub_carry      <= exe_arith_sub_carry;      end
-always @(posedge clk) begin if(rst_n == 1'b0) wr_arith_add_carry      <= 1'd0;      else if(w_load) wr_arith_add_carry      <= exe_arith_add_carry;      end
-always @(posedge clk) begin if(rst_n == 1'b0) wr_arith_adc_carry      <= 1'd0;      else if(w_load) wr_arith_adc_carry      <= exe_arith_adc_carry;      end
-always @(posedge clk) begin if(rst_n == 1'b0) wr_arith_sbb_carry      <= 1'd0;      else if(w_load) wr_arith_sbb_carry      <= exe_arith_sbb_carry;      end
-always @(posedge clk) begin if(rst_n == 1'b0) wr_mult_overflow        <= 1'd0;      else if(w_load) wr_mult_overflow        <= exe_mult_overflow;        end
+wire wr_clear_rflag;
 
-always @(posedge clk) begin if(rst_n == 1'b0) wr_stack_offset         <= 32'd0;     else if(w_load) wr_stack_offset         <= exe_stack_offset;         end
+wire wr_string_in_progress;
+reg  wr_string_in_progress_last;
 
-always @(posedge clk) begin
-    if(rst_n == 1'b0)   wr_cmd <= `CMD_NULL;
-    else if(wr_reset)   wr_cmd <= `CMD_NULL;
-    else if(w_load)     wr_cmd <= exe_cmd;
-    else if(wr_ready)   wr_cmd <= `CMD_NULL;
-end
-
-always @(posedge clk) begin
-    if(rst_n == 1'b0)                                       wr_mutex <= 11'd0;
-    else if(wr_reset)                                       wr_mutex <= 11'd0;
-    else if(w_load)                                         wr_mutex <= exe_mutex;
-    else if(wr_ready && ~(wr_interrupt_possible_prepare))   wr_mutex <= 11'd0;
-end
-
-//------------------------------------------------------------------------------
-
-wire wr_operand_16bit;
-wire wr_address_16bit;
-
-wire [1:0] wr_modregrm_mod;
-wire [2:0] wr_modregrm_reg;
-wire [2:0] wr_modregrm_rm;
-
-assign wr_operand_16bit = ~(wr_operand_32bit);
-assign wr_address_16bit = ~(wr_address_32bit);
-
-assign wr_modregrm_mod = wr_decoder[15:14];
-assign wr_modregrm_reg = wr_decoder[13:11];
-assign wr_modregrm_rm  = wr_decoder[10:8];
-
-//------------------------------------------------------------------------------
-
-wire [31:0] wr_descriptor_touch_offset;
-wire [31:0] wr_descriptor_busy_tss_offset;
-
-assign wr_descriptor_touch_offset =
-    (glob_param_1[2] == 1'b0)?   gdtr_base + { 16'd0, glob_param_1[15:3], 3'd0 } + 32'd5 :
-                                 ldtr_base + { 16'd0, glob_param_1[15:3], 3'd0 } + 32'd5;
-                                
-assign wr_descriptor_busy_tss_offset =
-                                gdtr_base + { 16'd0, glob_param_1[15:3], 3'd0 } + 32'd4;
-
-//------------------------------------------------------------------------------ write memory
-
-wire memory_write_system;
-
-wire        write_for_wr_ready;
-wire [31:0] wr_string_es_linear;
-
-assign memory_write_system =
-    write_system_touch || write_system_busy_tss || write_system_dword || write_system_word || write_rmw_system_dword;
-
-assign write_cpl = 
-    (write_new_stack_virtual)?      glob_descriptor_2[`DESC_BITS_DPL] :
-    (memory_write_system)?          2'd0 :
-                                    cpl;
-
-assign write_lock = wr_prefix_group_1_lock;
-
-assign write_rmw = write_rmw_virtual || write_rmw_system_dword;
-
-assign write_address =
-    (write_string_es_virtual)?                  wr_string_es_linear :
-    (write_stack_virtual)?                      wr_push_linear :
-    (write_new_stack_virtual)?                  wr_new_push_linear :
-    (write_system_touch)?                       wr_descriptor_touch_offset :
-    (write_system_busy_tss)?                    wr_descriptor_busy_tss_offset :
-    (write_system_dword || write_system_word)?  wr_system_linear :
-                                                wr_linear; //used by write_rmw_system_dword
-
-assign write_data =
-    (write_stack_virtual || write_string_es_virtual || write_new_stack_virtual)?    result_push :
-    (write_system_touch)?                                                           { 24'd0, glob_descriptor[47:41], 1'b1 } :
-    (write_system_busy_tss)?                                                        glob_descriptor[63:32] | 32'h00000200 :
-    (write_rmw_system_dword || write_system_dword || write_system_word)?            wr_system_dword :
-                                                                                    result;
-
-assign write_length =
-    (write_stack_virtual || write_new_stack_virtual)?   wr_push_length :
-    (write_system_touch)?       3'd1 :
-    (write_system_busy_tss)?    3'd4 :
-    (write_length_word)?        3'd2 :
-    (write_rmw_system_dword)?   3'd4 :
-    (write_system_dword)?       3'd4 :
-    (write_system_word)?        3'd2 :
-    (write_length_dword)?       3'd4 :
-    wr_is_8bit?                 3'd1 : //last 3: write_string_es_virtual also
-    wr_operand_16bit?           3'd2 :
-                                3'd4;
-
-assign write_do = ~(wr_reset) && ~(write_done) && ~(write_page_fault) && ~(write_ac_fault) &&
-    (write_rmw_virtual || write_virtual || write_stack_virtual || write_new_stack_virtual ||
-     write_string_es_virtual || memory_write_system);
-
-
-assign write_for_wr_ready = write_done && ~(write_page_fault) && ~(write_ac_fault);
-
-//------------------------------------------------------------------------------ write io
-
-wire write_io_for_wr_ready;
-
-assign io_write_do      = write_io;
-assign io_write_address = glob_param_1[15:0];
-assign io_write_length  = (wr_is_8bit)? 3'd1 : (wr_operand_16bit)? 3'd2 : 3'd4;
-assign io_write_data    = result_push;    
-
-assign write_io_for_wr_ready = io_write_done;
-
-//------------------------------------------------------------------------------ esp speculative
-
-always @(posedge clk) begin
-    if(rst_n == 1'b0)                                               wr_esp_prev <= 32'd0;
-    else if(wr_make_esp_speculative && ~(wr_is_esp_speculative))    wr_esp_prev <= esp;
-end
-
-always @(posedge clk) begin
-    if(rst_n == 1'b0)                   wr_is_esp_speculative <= `FALSE;
-    else if(wr_reset || exe_reset)      wr_is_esp_speculative <= `FALSE;
-    else if(wr_make_esp_commit)         wr_is_esp_speculative <= `FALSE;
-    else if(wr_make_esp_speculative)    wr_is_esp_speculative <= `TRUE;
-end
-
-//------------------------------------------------------------------------------
-
-//------------------------------------------------------------------------------
-
-// synthesis translate_off
-wire _unused_ok = &{ 1'b0, glob_descriptor_2[63:47], glob_descriptor_2[44:0], exe_decoder[39:16], 1'b0 };
-// synthesis translate_on
-
-//------------------------------------------------------------------------------
+reg wr_first_cycle;
 
 wire        write_stack_virtual;
 wire        write_new_stack_virtual;
@@ -762,6 +515,246 @@ wire        wr_string_ignore;
 wire        wr_zflag_result;
 wire        wr_string_zf_finish;
 wire        wr_string_finish;
+
+assign tr_base     = {   tr_cache[63:56],   tr_cache[39:16] };
+
+assign cs_base     = { cs_cache[63:56], cs_cache[39:16] };
+assign cs_limit    = cs_cache[`DESC_BIT_G]? { cs_cache[51:48], cs_cache[15:0], 12'hFFF } : { 12'd0, cs_cache[51:48], cs_cache[15:0] };
+
+assign es_base     = { es_cache[63:56], es_cache[39:16] };
+assign es_limit    = es_cache[`DESC_BIT_G]? { es_cache[51:48], es_cache[15:0], 12'hFFF } : { 12'd0, es_cache[51:48], es_cache[15:0] };
+
+assign ss_base     = { ss_cache[63:56], ss_cache[39:16] };
+assign ss_limit    = ss_cache[`DESC_BIT_G]? { ss_cache[51:48], ss_cache[15:0], 12'hFFF } : { 12'd0, ss_cache[51:48], ss_cache[15:0] };
+
+assign ldtr_base   = { ldtr_cache[63:56], ldtr_cache[39:16] };
+
+//------------------------------------------------------------------------------
+
+wire wr_ready;
+wire w_load;
+
+wire wr_waiting;
+
+wire wr_one_cycle_wait;
+
+//------------------------------------------------------------------------------
+
+assign wr_ready = ~(wr_waiting) && wr_cmd != `CMD_NULL; //NOTE: do not use: wr_mutex[`MUTEX_ACTIVE_BIT];
+
+assign wr_busy = wr_waiting || exc_init || wr_debug_prepare || wr_interrupt_possible_prepare || (wr_one_cycle_wait && wr_first_cycle);
+
+assign w_load = exe_ready;
+
+assign wr_is_front = wr_cmd != `CMD_NULL;
+
+//------------------------------------------------------------------------------
+
+assign wr_finished =
+    wr_ready && (~(wr_not_finished) || (wr_hlt_in_progress && iflag_to_reg && interrupt_do) || wr_string_in_progress);
+
+assign wr_interrupt_possible_prepare =
+    interrupt_do &&
+    wr_ready && (~(wr_not_finished) || wr_hlt_in_progress || wr_string_in_progress) &&
+    ~(wr_debug_prepare) &&
+    ~(wr_inhibit_interrupts_and_debug) && ~(wr_inhibit_interrupts) && iflag_to_reg;
+
+assign wr_clear_rflag = wr_finished && wr_eip <= cs_limit && ~(exc_init) && ~(wr_debug_prepare) && ~(wr_interrupt_possible_prepare);
+    
+always @(posedge clk) begin
+    if(rst_n == 1'b0)   wr_interrupt_possible <= `FALSE;
+    else if(wr_reset)   wr_interrupt_possible <= `FALSE;
+    else                wr_interrupt_possible <= wr_interrupt_possible_prepare;
+end
+
+always @(posedge clk) begin
+    if(rst_n == 1'b0)   wr_debug_init <= `FALSE;
+    else                wr_debug_init <= wr_debug_prepare;
+end
+
+always @(posedge clk) begin
+    if(rst_n == 1'b0)   wr_string_in_progress_last <= `FALSE;
+    else                wr_string_in_progress_last <= wr_string_in_progress;
+end
+
+assign wr_string_in_progress_final = wr_string_in_progress || ((wr_debug_init || wr_interrupt_possible) && wr_string_in_progress_last);
+
+//------------------------------------------------------------------------------
+
+always @(posedge clk) begin
+    if(rst_n == 1'b0)   wr_first_cycle <= `FALSE;
+    else if(wr_reset)   wr_first_cycle <= `FALSE;
+    else if(w_load)     wr_first_cycle <= `TRUE;
+    else                wr_first_cycle <= `FALSE;
+end
+
+//------------------------------------------------------------------------------
+
+always @(posedge clk) begin if(rst_n == 1'b0) wr_decoder              <= 16'd0;     else if(w_load) wr_decoder              <= exe_decoder[15:0];        end
+always @(posedge clk) begin if(rst_n == 1'b0) wr_eip                  <= 32'd0;     else if(w_load) wr_eip                  <= exe_eip_final;            end
+always @(posedge clk) begin if(rst_n == 1'b0) wr_operand_32bit        <= `FALSE;    else if(w_load) wr_operand_32bit        <= exe_operand_32bit;        end
+always @(posedge clk) begin if(rst_n == 1'b0) wr_address_32bit        <= `FALSE;    else if(w_load) wr_address_32bit        <= exe_address_32bit;        end
+always @(posedge clk) begin if(rst_n == 1'b0) wr_prefix_group_1_rep   <= 2'd0;      else if(w_load) wr_prefix_group_1_rep   <= exe_prefix_group_1_rep;   end
+always @(posedge clk) begin if(rst_n == 1'b0) wr_prefix_group_1_lock  <= `FALSE;    else if(w_load) wr_prefix_group_1_lock  <= exe_prefix_group_1_lock;  end
+always @(posedge clk) begin if(rst_n == 1'b0) wr_consumed             <= 4'd0;      else if(w_load) wr_consumed             <= exe_consumed_final;       end
+always @(posedge clk) begin if(rst_n == 1'b0) wr_is_8bit              <= `FALSE;    else if(w_load) wr_is_8bit              <= exe_is_8bit_final;        end
+always @(posedge clk) begin if(rst_n == 1'b0) wr_cmdex                <= 4'd0;      else if(w_load) wr_cmdex                <= exe_cmdex;                end
+always @(posedge clk) begin if(rst_n == 1'b0) wr_dst_is_reg           <= `FALSE;    else if(w_load) wr_dst_is_reg           <= exe_dst_is_reg;           end
+always @(posedge clk) begin if(rst_n == 1'b0) wr_dst_is_rm            <= `FALSE;    else if(w_load) wr_dst_is_rm            <= exe_dst_is_rm;            end
+always @(posedge clk) begin if(rst_n == 1'b0) wr_dst_is_memory        <= `FALSE;    else if(w_load) wr_dst_is_memory        <= exe_dst_is_memory;        end
+always @(posedge clk) begin if(rst_n == 1'b0) wr_dst_is_eax           <= `FALSE;    else if(w_load) wr_dst_is_eax           <= exe_dst_is_eax;           end
+always @(posedge clk) begin if(rst_n == 1'b0) wr_dst_is_edx_eax       <= `FALSE;    else if(w_load) wr_dst_is_edx_eax       <= exe_dst_is_edx_eax;       end
+always @(posedge clk) begin if(rst_n == 1'b0) wr_dst_is_implicit_reg  <= `FALSE;    else if(w_load) wr_dst_is_implicit_reg  <= exe_dst_is_implicit_reg;  end
+always @(posedge clk) begin if(rst_n == 1'b0) wr_linear               <= 32'd0;     else if(w_load) wr_linear               <= exe_linear;               end
+
+always @(posedge clk) begin if(rst_n == 1'b0) result                  <= 32'd0;     else if(w_load) result                  <= exe_result;               end
+always @(posedge clk) begin if(rst_n == 1'b0) result2                 <= 32'd0;     else if(w_load) result2                 <= exe_result2;              end
+always @(posedge clk) begin if(rst_n == 1'b0) result_push             <= 32'd0;     else if(w_load) result_push             <= exe_result_push;          end
+always @(posedge clk) begin if(rst_n == 1'b0) result_signals          <= 5'd0;      else if(w_load) result_signals          <= exe_result_signals;       end
+
+always @(posedge clk) begin if(rst_n == 1'b0) wr_arith_index          <= 4'd0;      else if(w_load) wr_arith_index          <= exe_arith_index;          end
+always @(posedge clk) begin if(rst_n == 1'b0) wr_src                  <= 32'd0;     else if(w_load) wr_src                  <= src_final;                end
+always @(posedge clk) begin if(rst_n == 1'b0) wr_dst                  <= 32'd0;     else if(w_load) wr_dst                  <= dst_final;                end
+
+always @(posedge clk) begin if(rst_n == 1'b0) wr_arith_sub_carry      <= 1'd0;      else if(w_load) wr_arith_sub_carry      <= exe_arith_sub_carry;      end
+always @(posedge clk) begin if(rst_n == 1'b0) wr_arith_add_carry      <= 1'd0;      else if(w_load) wr_arith_add_carry      <= exe_arith_add_carry;      end
+always @(posedge clk) begin if(rst_n == 1'b0) wr_arith_adc_carry      <= 1'd0;      else if(w_load) wr_arith_adc_carry      <= exe_arith_adc_carry;      end
+always @(posedge clk) begin if(rst_n == 1'b0) wr_arith_sbb_carry      <= 1'd0;      else if(w_load) wr_arith_sbb_carry      <= exe_arith_sbb_carry;      end
+always @(posedge clk) begin if(rst_n == 1'b0) wr_mult_overflow        <= 1'd0;      else if(w_load) wr_mult_overflow        <= exe_mult_overflow;        end
+
+always @(posedge clk) begin if(rst_n == 1'b0) wr_stack_offset         <= 32'd0;     else if(w_load) wr_stack_offset         <= exe_stack_offset;         end
+
+always @(posedge clk) begin
+    if(rst_n == 1'b0)   wr_cmd <= `CMD_NULL;
+    else if(wr_reset)   wr_cmd <= `CMD_NULL;
+    else if(w_load)     wr_cmd <= exe_cmd;
+    else if(wr_ready)   wr_cmd <= `CMD_NULL;
+end
+
+always @(posedge clk) begin
+    if(rst_n == 1'b0)                                       wr_mutex <= 11'd0;
+    else if(wr_reset)                                       wr_mutex <= 11'd0;
+    else if(w_load)                                         wr_mutex <= exe_mutex;
+    else if(wr_ready && ~(wr_interrupt_possible_prepare))   wr_mutex <= 11'd0;
+end
+
+//------------------------------------------------------------------------------
+
+wire wr_operand_16bit;
+wire wr_address_16bit;
+
+wire [1:0] wr_modregrm_mod;
+wire [2:0] wr_modregrm_reg;
+wire [2:0] wr_modregrm_rm;
+
+assign wr_operand_16bit = ~(wr_operand_32bit);
+assign wr_address_16bit = ~(wr_address_32bit);
+
+assign wr_modregrm_mod = wr_decoder[15:14];
+assign wr_modregrm_reg = wr_decoder[13:11];
+assign wr_modregrm_rm  = wr_decoder[10:8];
+
+//------------------------------------------------------------------------------
+
+wire [31:0] wr_descriptor_touch_offset;
+wire [31:0] wr_descriptor_busy_tss_offset;
+
+assign wr_descriptor_touch_offset =
+    (glob_param_1[2] == 1'b0)?   gdtr_base + { 16'd0, glob_param_1[15:3], 3'd0 } + 32'd5 :
+                                 ldtr_base + { 16'd0, glob_param_1[15:3], 3'd0 } + 32'd5;
+                                
+assign wr_descriptor_busy_tss_offset =
+                                gdtr_base + { 16'd0, glob_param_1[15:3], 3'd0 } + 32'd4;
+
+//------------------------------------------------------------------------------ write memory
+
+wire memory_write_system;
+
+wire        write_for_wr_ready;
+wire [31:0] wr_string_es_linear;
+
+assign memory_write_system =
+    write_system_touch || write_system_busy_tss || write_system_dword || write_system_word || write_rmw_system_dword;
+
+assign write_cpl = 
+    (write_new_stack_virtual)?      glob_descriptor_2[`DESC_BITS_DPL] :
+    (memory_write_system)?          2'd0 :
+                                    cpl;
+
+assign write_lock = wr_prefix_group_1_lock;
+
+assign write_rmw = write_rmw_virtual || write_rmw_system_dword;
+
+assign write_address =
+    (write_string_es_virtual)?                  wr_string_es_linear :
+    (write_stack_virtual)?                      wr_push_linear :
+    (write_new_stack_virtual)?                  wr_new_push_linear :
+    (write_system_touch)?                       wr_descriptor_touch_offset :
+    (write_system_busy_tss)?                    wr_descriptor_busy_tss_offset :
+    (write_system_dword || write_system_word)?  wr_system_linear :
+                                                wr_linear; //used by write_rmw_system_dword
+
+assign write_data =
+    (write_stack_virtual || write_string_es_virtual || write_new_stack_virtual)?    result_push :
+    (write_system_touch)?                                                           { 24'd0, glob_descriptor[47:41], 1'b1 } :
+    (write_system_busy_tss)?                                                        glob_descriptor[63:32] | 32'h00000200 :
+    (write_rmw_system_dword || write_system_dword || write_system_word)?            wr_system_dword :
+                                                                                    result;
+
+assign write_length =
+    (write_stack_virtual || write_new_stack_virtual)?   wr_push_length :
+    (write_system_touch)?       3'd1 :
+    (write_system_busy_tss)?    3'd4 :
+    (write_length_word)?        3'd2 :
+    (write_rmw_system_dword)?   3'd4 :
+    (write_system_dword)?       3'd4 :
+    (write_system_word)?        3'd2 :
+    (write_length_dword)?       3'd4 :
+    wr_is_8bit?                 3'd1 : //last 3: write_string_es_virtual also
+    wr_operand_16bit?           3'd2 :
+                                3'd4;
+
+assign write_do = ~(wr_reset) && ~(write_page_fault) && ~(write_ac_fault) &&
+    (write_rmw_virtual || write_virtual || write_stack_virtual || write_new_stack_virtual ||
+     write_string_es_virtual || memory_write_system);
+
+
+assign write_for_wr_ready = write_done && ~(write_page_fault) && ~(write_ac_fault);
+
+//------------------------------------------------------------------------------ write io
+
+wire write_io_for_wr_ready;
+
+assign io_write_do      = write_io;
+assign io_write_address = glob_param_1[15:0];
+assign io_write_length  = (wr_is_8bit)? 3'd1 : (wr_operand_16bit)? 3'd2 : 3'd4;
+assign io_write_data    = result_push;    
+
+assign write_io_for_wr_ready = io_write_done;
+
+//------------------------------------------------------------------------------ esp speculative
+
+always @(posedge clk) begin
+    if(rst_n == 1'b0)                                               wr_esp_prev <= 32'd0;
+    else if(wr_make_esp_speculative && ~(wr_is_esp_speculative))    wr_esp_prev <= esp;
+end
+
+always @(posedge clk) begin
+    if(rst_n == 1'b0)                   wr_is_esp_speculative <= `FALSE;
+    else if(wr_reset || exe_reset)      wr_is_esp_speculative <= `FALSE;
+    else if(wr_make_esp_commit)         wr_is_esp_speculative <= `FALSE;
+    else if(wr_make_esp_speculative)    wr_is_esp_speculative <= `TRUE;
+end
+
+//------------------------------------------------------------------------------
+
+//------------------------------------------------------------------------------
+
+// synthesis translate_off
+wire _unused_ok = &{ 1'b0, glob_descriptor_2[63:47], glob_descriptor_2[44:0], exe_decoder[39:16], 1'b0 };
+// synthesis translate_on
+
+//------------------------------------------------------------------------------
 
 write_commands write_commands_inst(
     .clk                (clk),

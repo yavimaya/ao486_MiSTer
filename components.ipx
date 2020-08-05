@@ -54,18 +54,6 @@
   <tag2 key="COMPONENT_HIDE_FROM_SOPC" value="true" />
  </component>
  <component
-   name="pc_bus"
-   file="./rtl/soc/pc_bus/pc_bus_hw.tcl"
-   displayName="pc_bus"
-   version="1.0"
-   description=""
-   tags="AUTHORSHIP= /// CONNECTION_TYPES=avalon,clock,reset /// INTERNAL_COMPONENT=false"
-   categories="ao486"
-   factory="TclModuleFactory">
-  <tag2 key="COMPONENT_EDITABLE" value="true" />
-  <tag2 key="COMPONENT_HIDE_FROM_SOPC" value="true" />
- </component>
- <component
    name="pc_dma"
    file="./rtl/soc/pc_dma/pc_dma_hw.tcl"
    displayName="pc_dma"
@@ -126,18 +114,6 @@
   <tag2 key="COMPONENT_HIDE_FROM_SOPC" value="true" />
  </component>
  <component
-   name="driver_sd"
-   file="./rtl/soc/driver_sd/driver_sd_hw.tcl"
-   displayName="driver_sd"
-   version="2.0"
-   description=""
-   tags="AUTHORSHIP= /// CONNECTION_TYPES=avalon,clock,conduit,reset /// INTERNAL_COMPONENT=false"
-   categories="ao486"
-   factory="TclModuleFactory">
-  <tag2 key="COMPONENT_EDITABLE" value="true" />
-  <tag2 key="COMPONENT_HIDE_FROM_SOPC" value="true" />
- </component>
- <component
    name="sound"
    file="./rtl/soc/sound/sound_hw.tcl"
    displayName="sound"
@@ -174,9 +150,9 @@
   <tag2 key="COMPONENT_HIDE_FROM_SOPC" value="true" />
  </component>
  <component
-   name="width_trans"
-   file="./rtl/soc/width_trans/width_trans_hw.tcl"
-   displayName="width_trans"
+   name="uart"
+   file="./rtl/soc/uart/uart_hw.tcl"
+   displayName="uart"
    version="17.0"
    description=""
    tags="AUTHORSHIP= /// CONNECTION_TYPES=avalon,clock,conduit,reset /// INTERNAL_COMPONENT=false"

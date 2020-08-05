@@ -26,8 +26,6 @@
 
 `include "defines.v"
 
-//PARSED_COMMENTS: this file contains parsed script comments
-
 module icache(
     input           clk,
     input           rst_n,
@@ -40,7 +38,6 @@ module icache(
     input           icacheread_do,
     input   [31:0]  icacheread_address,
     input   [4:0]   icacheread_length, // takes into account: page size and cs segment limit
-    input           icacheread_cache_disable,
     //END
     
     //REQ:
@@ -48,20 +45,12 @@ module icache(
     input               readcode_done,
     
     output      [31:0]  readcode_address,
-    input       [127:0] readcode_line,
     input       [31:0]  readcode_partial,
-    input               readcode_partial_done,
-    //END
-    
-    //REQ:
-    output              dcachetoicache_accept_do,
-    input [31:0]        dcachetoicache_accept_address,
-    input               dcachetoicache_accept_empty,
     //END
     
     //REQ:
     output              prefetchfifo_write_do,
-    output  [135:0]     prefetchfifo_write_data,
+    output  [35:0]      prefetchfifo_write_data,
     //END
     
     //REQ:
@@ -69,33 +58,33 @@ module icache(
     output [4:0]        prefetched_length,
     //END
     
-    //RESP:
-    input               invdcode_do,
-    output              invdcode_done
-    //END
+    input   [27:2]      snoop_addr,
+    input   [31:0]      snoop_data,
+    input    [3:0]      snoop_be,
+    input               snoop_we
 );
 
 //------------------------------------------------------------------------------
 
-//------------------------------------------------------------------------------
+localparam STATE_IDLE = 1'd0;
+localparam STATE_READ = 1'd1;
 
-reg [1:0]   state;
-reg [31:0]  address;
-reg [4:0]   length;
-reg         cache_disable;
-reg [11:0]  partial_length;
-reg         reset_waiting;
+reg          state;
+reg [31:0]   address;
+reg [4:0]    length;
+reg [11:0]   partial_length;
+reg          reset_waiting;
+             
+wire [4:0]   partial_length_current;
 
-//------------------------------------------------------------------------------
+wire [11:0]  length_burst;
+wire [35:0]  prefetch_line;
 
-wire [4:0] partial_length_current;
-
-//------------------------------------------------------------------------------
-
-localparam [1:0] STATE_IDLE             = 2'd0;
-localparam [1:0] STATE_INVALIDATE_WRITE = 2'd1;
-localparam [1:0] STATE_CHECK            = 2'd2;
-localparam [1:0] STATE_READ             = 2'd3;
+wire         readcode_cache_do;
+wire [31:0]  readcode_cache_address;
+wire         readcode_cache_valid;
+wire         readcode_cache_done;
+wire [31:0]  readcode_cache_data;
 
 //------------------------------------------------------------------------------
 
@@ -103,7 +92,6 @@ localparam [1:0] STATE_READ             = 2'd3;
 assign partial_length_current =
     ({ 2'b0, partial_length[2:0] } > length)? length : { 2'b0, partial_length[2:0] };
     
-
 //------------------------------------------------------------------------------
 
 always @(posedge clk) begin
@@ -114,381 +102,93 @@ end
 
 //------------------------------------------------------------------------------
 
-wire [127:0] matched_data_line;
-wire [6:0]   control_after_invalidate_write;
-wire [6:0]   control_after_match;
-wire [6:0]   control_after_line_read;
-wire         matched;
-wire [1:0]   plru_index;
+wire [31:0] mux_address;
+wire  [4:0] mux_length;
+
+assign mux_address = (state == STATE_IDLE)? icacheread_address : address;
+assign mux_length  = (state == STATE_IDLE)? icacheread_length : length;
+
+assign length_burst =
+    (mux_address[1:0] == 2'd0)?    { 3'd4, 3'd4, 3'd4, 3'd4 } :
+    (mux_address[1:0] == 2'd1)?    { 3'd4, 3'd4, 3'd4, 3'd3 } :
+    (mux_address[1:0] == 2'd2)?    { 3'd4, 3'd4, 3'd4, 3'd2 } :
+                                   { 3'd4, 3'd4, 3'd4, 3'd1 };
+                            
+assign prefetch_line =
+    (partial_length[2:0] == 3'd1)?   {                      4'd1 ,                  24'd0, readcode_cache_data[31:24] } :
+    (partial_length[2:0] == 3'd2)?   { (mux_length > 5'd2)? 4'd2 : mux_length[3:0], 16'd0, readcode_cache_data[31:16] } :
+    (partial_length[2:0] == 3'd3)?   { (mux_length > 5'd3)? 4'd3 : mux_length[3:0],  8'd0, readcode_cache_data[31:8] } :
+                                     { (mux_length > 5'd4)? 4'd4 : mux_length[3:0],        readcode_cache_data[31:0] };
 
 //------------------------------------------------------------------------------
 
-wire [11:0]     length_burst;
-wire [11:0]     length_line;
-wire [135:0]    prefetch_line;
-wire [135:0]    prefetch_partial;
-
-//------------------------------------------------------------------------------
-
-wire        control_ram_read_do;
-wire [31:0] control_ram_address;
-wire        control_ram_write_do;
-wire [6:0]  control_ram_data;
-wire [6:0]  control_ram_q;
-
-wire            data_ram0_read_do;
-wire [31:0]     data_ram0_address;
-wire            data_ram0_write_do;
-wire [127:0]    data_ram0_data;
-wire [147:0]    data_ram0_q;
-
-wire            data_ram1_read_do;
-wire [31:0]     data_ram1_address;
-wire            data_ram1_write_do;
-wire [127:0]    data_ram1_data;
-wire [147:0]    data_ram1_q;
-
-wire            data_ram2_read_do;
-wire [31:0]     data_ram2_address;
-wire            data_ram2_write_do;
-wire [127:0]    data_ram2_data;
-wire [147:0]    data_ram2_q;
-
-wire            data_ram3_read_do;
-wire [31:0]     data_ram3_address;
-wire            data_ram3_write_do;
-wire [127:0]    data_ram3_data;
-wire [147:0]    data_ram3_q;
-
-//------------------------------------------------------------------------------
-
-//------------------------------------------------------------------------------
-
-icache_matched icache_matched_inst(
-    
-    .address    (address),      //input [31:0]
-    
-    .control    (control_ram_q),    //input [6:0]
-    
-    .data_0     (data_ram0_q),      //input [147:0]
-    .data_1     (data_ram1_q),      //input [147:0]
-    .data_2     (data_ram2_q),      //input [147:0]
-    .data_3     (data_ram3_q),      //input [147:0]
-    
-    .matched                            (matched),              //output
-    .matched_data_line                  (matched_data_line),    //output [127:0]
-    
-    .plru_index                         (plru_index),           //output [1:0]
-                                   
-    .control_after_invalidate_write     (control_after_invalidate_write),   //output [6:0]
-    .control_after_match                (control_after_match),              //output [6:0]
-    .control_after_line_read            (control_after_line_read)           //output [6:0]
-);
-
-
-
-icache_read icache_read_inst(
+l1_icache l1_icache_inst(
    
-    .line           (matched_data_line),        //input [127:0]
-    .read_data      (readcode_partial),         //input [31:0]
-    .read_length    (partial_length[2:0]),      //input [2:0]
-                             
-    .address    ((state == STATE_IDLE)? icacheread_address : address),  //input [31:0]
-    .length     ((state == STATE_IDLE)? icacheread_length : length),    //input [4:0]
-                             
-    .length_burst   (length_burst),     //output [11:0]
-    .length_line    (length_line),      //output [11:0]
-                             
-    .prefetch_line      (prefetch_line),    //output [135:0]
-    .prefetch_partial   (prefetch_partial)  //output [135:0]
-);
+    .CLK             (clk),
+    .RESET           (~rst_n),
+
+    .CPU_REQ         (readcode_cache_do),
+    .CPU_ADDR        (readcode_cache_address),
+    .CPU_VALID       (readcode_cache_valid),
+    .CPU_DONE        (readcode_cache_done),
+    .CPU_DATA        (readcode_cache_data),
     
-icache_control_ram icache_control_ram_inst(
-    .clk        (clk),
-    .rst_n      (rst_n),
+    .MEM_REQ         (readcode_do),
+    .MEM_ADDR        (readcode_address),
+    .MEM_DONE        (readcode_done),
+    .MEM_DATA        (readcode_partial),
     
-    .address        (control_ram_address),  //input [31:0]
-                                           
-    //RESP:
-    .read_do        (control_ram_read_do),      //input
-    .q              (control_ram_q),            //output [6:0]
-    //END
-                                           
-    //RESP:
-    .write_do       (control_ram_write_do),     //input
-    .data           (control_ram_data),         //input [6:0]  
-    //END
-                                           
-    //RESP:
-    .invdcode_do    (invdcode_do && state == STATE_IDLE),       //input
-    .invdcode_done  (invdcode_done)                             //output
-    //END
+    .snoop_addr      (snoop_addr),
+    .snoop_data      (snoop_data),
+    .snoop_be        (snoop_be),
+    .snoop_we        (snoop_we)
 );
 
-cache_data_ram cache_data_ram0_inst(
-    .clk        (clk),
-    .rst_n      (rst_n),
-    
-    .address        (data_ram0_address),        //input [31:0]
-    
-    //RESP:
-    .read_do        (data_ram0_read_do),        //input
-    .q              (data_ram0_q),              //output [147:0]
-    //END
-    
-    //RESP:
-    .write_do       (data_ram0_write_do),       //input
-    .data           (data_ram0_data)            //input [127:0]
-    //END
-);
+assign readcode_cache_do =
+   (~rst_n) ? (`FALSE) :
+   (state == STATE_IDLE && ~(pr_reset) && icacheread_do && icacheread_length > 5'd0) ? (`TRUE) :
+   `FALSE;
+   
+assign readcode_cache_address = { icacheread_address[31:2], 2'd0 };
+   
+assign prefetchfifo_write_do =
+   (~rst_n) ? (`FALSE) :
+   (state == STATE_READ && pr_reset == `FALSE && reset_waiting == `FALSE && readcode_cache_valid) ? (`TRUE) :
+   `FALSE;
+   
+assign prefetchfifo_write_data = prefetch_line;
+assign prefetched_length       = partial_length_current;
 
-cache_data_ram cache_data_ram1_inst(
-    .clk        (clk),
-    .rst_n      (rst_n),
-    
-    .address        (data_ram1_address),        //input [31:0]
-    
-    //RESP:
-    .read_do        (data_ram1_read_do),        //input
-    .q              (data_ram1_q),              //output [147:0]
-    //END
-    
-    //RESP:
-    .write_do       (data_ram1_write_do),       //input
-    .data           (data_ram1_data)            //input [127:0]
-    //END
-);
-
-cache_data_ram cache_data_ram2_inst(
-    .clk        (clk),
-    .rst_n      (rst_n),
-    
-    .address        (data_ram2_address),        //input [31:0]
-    
-    //RESP:
-    .read_do        (data_ram2_read_do),        //input
-    .q              (data_ram2_q),              //output [147:0]
-    //END
-    
-    //RESP:
-    .write_do       (data_ram2_write_do),       //input
-    .data           (data_ram2_data)            //input [127:0]
-    //END
-);
-
-cache_data_ram cache_data_ram3_inst(
-    .clk        (clk),
-    .rst_n      (rst_n),
-    
-    .address        (data_ram3_address),        //input [31:0]
-    
-    //RESP:
-    .read_do        (data_ram3_read_do),        //input
-    .q              (data_ram3_q),              //output [147:0]
-    //END
-    
-    //RESP:
-    .write_do       (data_ram3_write_do),       //input
-    .data           (data_ram3_data)            //input [127:0]
-    //END
-);
-
-
-/*******************************************************************************SCRIPT
-
-
-IF(state == STATE_IDLE);
-    
-    SAVE(length,          icacheread_length);
-    SAVE(cache_disable,   icacheread_cache_disable);
-    
-    IF(invdcode_do);
-    
-        //wait
-    
-    // check if invalidate needed because of write from dcache
-    ELSE_IF(~(dcachetoicache_accept_empty));
-        
-        SET(control_ram_read_do);
-        SET(control_ram_address, dcachetoicache_accept_address);
-        
-        SET(data_ram0_read_do);
-        SET(data_ram0_address, dcachetoicache_accept_address);
-        
-        SET(data_ram1_read_do);
-        SET(data_ram1_address, dcachetoicache_accept_address);
-        
-        SET(data_ram2_read_do);
-        SET(data_ram2_address, dcachetoicache_accept_address);
-        
-        SET(data_ram3_read_do);
-        SET(data_ram3_address, dcachetoicache_accept_address);
-        
-        SET(dcachetoicache_accept_do);
-        
-        SAVE(address, dcachetoicache_accept_address);
-
-        SAVE(state, STATE_INVALIDATE_WRITE);
-    
-    ELSE_IF(~(pr_reset) && icacheread_do && icacheread_length > 5'd0);
-    
-        SET(control_ram_read_do);
-        SET(control_ram_address, icacheread_address);
-        
-        SET(data_ram0_read_do);
-        SET(data_ram0_address, icacheread_address);
-        
-        SET(data_ram1_read_do);
-        SET(data_ram1_address, icacheread_address);
-        
-        SET(data_ram2_read_do);
-        SET(data_ram2_address, icacheread_address);
-        
-        SET(data_ram3_read_do);
-        SET(data_ram3_address, icacheread_address);
-    
-        SAVE(address, icacheread_address);        
-        
-        IF(icacheread_do && icacheread_cache_disable);
-                    
-            SAVE(partial_length, length_burst);
-
-            SAVE(state, STATE_CHECK);
-        ENDIF();
-        
-        IF(icacheread_do && ~(icacheread_cache_disable));
-        
-            SAVE(partial_length, length_line);
-
-            SAVE(state, STATE_CHECK);
-        ENDIF();
-    
-    ENDIF();
-ENDIF();
-*/    
-
-/*******************************************************************************SCRIPT
-
-
-IF(state == STATE_INVALIDATE_WRITE);
-    
-    SET(control_ram_write_do);
-    SET(control_ram_address, address);
-    SET(control_ram_data,    control_after_invalidate_write);
-    
-    SAVE(state, STATE_IDLE);
-ENDIF();
-*/
-
-/*******************************************************************************SCRIPT
-
-IF(state == STATE_CHECK);
-
-    IF(matched);
-        
-        IF(pr_reset == `FALSE && reset_waiting == `FALSE);
-            
-            //write to prefetch fifo
-            SET(prefetchfifo_write_do);
-            SET(prefetchfifo_write_data, prefetch_line);
-            
-            //inform prefetch
-            SET(prefetched_do);
-            SET(prefetched_length, 5'd16 - { 1'b0, address[3:0] });
-            
-            //update pLRU
-            SET(control_ram_write_do);
-            SET(control_ram_address, address);
-            SET(control_ram_data,    control_after_match);
-        ENDIF();
-        
-        SAVE(state, STATE_IDLE);
-        
-    ELSE_IF(~(cache_disable)); //cache enabled
- 
-        SET(readcode_do);
-        SET(readcode_address, { address[31:4], 4'd0 });
-        
-        SAVE(state, STATE_READ);
-    
-    ELSE(); //cache disabled
-
-        SET(readcode_do);
-        SET(readcode_address, { address[31:2], 2'd0 });
-        
-        SAVE(state, STATE_READ);
-    ENDIF();
-ENDIF();
-*/
-
-/*******************************************************************************SCRIPT
-
-IF(state == STATE_READ);
-    
-    IF(pr_reset == `FALSE && reset_waiting == `FALSE);
-    
-        IF(readcode_partial_done || readcode_done);
-
-            IF(partial_length[2:0] > 3'd0 && length > 5'd0);
-                //write to prefetch fifo
-                SET(prefetchfifo_write_do);
-                SET(prefetchfifo_write_data, prefetch_partial);
-                
-                //inform prefetch
-                SET(prefetched_do);
-                SET(prefetched_length, partial_length_current);
-                
-                SAVE(length, length - partial_length_current);
-            ENDIF();
-
-            SAVE(partial_length, { 3'd0, partial_length[11:3] });
-
-        ENDIF();
-    
-        IF(readcode_done && ~(cache_disable));
-
-            //update icache control
-            SET(control_ram_write_do);
-            SET(control_ram_address, address);
-            SET(control_ram_data,    control_after_line_read);
-            
-            //update icache data
-            IF(plru_index[1:0] == 2'd0);
-                SET(data_ram0_write_do);
-                SET(data_ram0_address,   address);
-                SET(data_ram0_data,      readcode_line);
-            ENDIF();
-            
-            IF(plru_index[1:0] == 2'd1);
-                SET(data_ram1_write_do);
-                SET(data_ram1_address,   address);
-                SET(data_ram1_data,      readcode_line);
-            ENDIF();
-            
-            IF(plru_index[1:0] == 2'd2);
-                SET(data_ram2_write_do);
-                SET(data_ram2_address,   address);
-                SET(data_ram2_data,      readcode_line);
-            ENDIF();
-            
-            IF(plru_index[1:0] == 2'd3);
-                SET(data_ram3_write_do);
-                SET(data_ram3_address,   address);
-                SET(data_ram3_data,      readcode_line);
-            ENDIF();
-            
-        ENDIF();
-    ENDIF();
-    
-    IF(readcode_done);
-        SAVE(state, STATE_IDLE);
-    ENDIF();
-
-ENDIF();
-*/
-
-//------------------------------------------------------------------------------
-
-`include "autogen/icache.v"
+assign prefetched_do =
+   (~rst_n) ? (`FALSE) :
+   (state == STATE_READ && pr_reset == `FALSE && reset_waiting == `FALSE && readcode_cache_valid) ? (`TRUE) :
+   `FALSE;
+   
+always @(posedge clk) begin
+   if(rst_n == 1'b0) begin
+      state          <= STATE_IDLE;
+      length         <= 5'b0;
+      partial_length <= 12'b0;
+   end
+   else begin
+      if(state == STATE_IDLE && ~(pr_reset) && icacheread_do && icacheread_length > 5'd0) begin
+         state          <= STATE_READ;
+         partial_length <= length_burst;
+         length         <= icacheread_length;
+         address        <= icacheread_address;
+      end
+      else if (state == STATE_READ) begin
+         if(pr_reset == `FALSE && reset_waiting == `FALSE) begin
+            if(readcode_cache_valid) begin
+               if(partial_length[2:0] > 3'd0 && length > 5'd0) begin
+                  length         <= length - partial_length_current;
+                  partial_length <= { 3'd0, partial_length[11:3] }; 
+               end
+            end
+         end
+         if(readcode_cache_done) state <= STATE_IDLE;
+      end
+   end
+end     
 
 endmodule

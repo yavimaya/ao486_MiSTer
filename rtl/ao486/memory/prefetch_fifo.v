@@ -42,7 +42,7 @@ module prefetch_fifo(
     
     //RESP:
     input           prefetchfifo_write_do,
-    input   [135:0] prefetchfifo_write_data,
+    input   [35:0]  prefetchfifo_write_data,
     //END
     
     output  [4:0]   prefetchfifo_used,
@@ -56,41 +56,17 @@ module prefetch_fifo(
 
 //------------------------------------------------------------------------------
 
-assign prefetchfifo_accept_data = (second_processing)? second : q[67:0];
-
-assign prefetchfifo_accept_empty= empty && second_processing == `FALSE;
-
-//------------------------------------------------------------------------------
-
-wire [135:0] q;
+wire [35:0] q;
 wire         empty;
 
-//------------------------------------------------------------------------------
+assign prefetchfifo_accept_data = { q[35:32], 32'd0, q[31:0] };
+
+assign prefetchfifo_accept_empty = empty;
 
 //------------------------------------------------------------------------------
 
-reg        second_processing;
-reg [67:0] second;
-
-//------------------------------------------------------------------------------
-
-always @(posedge clk) begin
-    if(rst_n == 1'b0)                                                                                   second_processing <= `FALSE;
-    else if(pr_reset)                                                                                   second_processing <= `FALSE;
-    else if(prefetchfifo_accept_do && second_processing == `FALSE && q[135:132] != 4'd0 && ~(empty))    second_processing <= `TRUE;
-    else if(prefetchfifo_accept_do && second_processing == `TRUE)                                       second_processing <= `FALSE;
-end
-
-always @(posedge clk) begin
-    if(rst_n == 1'b0)                                               second <= 68'd0;
-    else if(prefetchfifo_accept_do && second_processing == `FALSE)  second <= q[135:68];
-end
-
-
-//------------------------------------------------------------------------------
-
-simple_fifo #(
-    .width      (136),
+simple_fifo_mlab #(
+    .width      (36),
     .widthu     (4)
 )
 prefetch_fifo_inst(
@@ -98,16 +74,16 @@ prefetch_fifo_inst(
     .rst_n      (rst_n),    //input
     .sclr       (pr_reset), //input
     
-    .rdreq      (prefetchfifo_accept_do && second_processing == `FALSE),                                //input
+    .rdreq      (prefetchfifo_accept_do),                                                               //input
     .wrreq      (prefetchfifo_write_do || prefetchfifo_signal_limit_do || prefetchfifo_signal_pf_do),   //input
-    .data       ((prefetchfifo_signal_limit_do)? { 4'd0, 64'd0, `PREFETCH_GP_FAULT, 64'd0 } :
-                 (prefetchfifo_signal_pf_do)?    { 4'd0, 64'd0, `PREFETCH_PF_FAULT, 64'd0 } :
-                                                     prefetchfifo_write_data),                          //input [135:0]
+    .data       ((prefetchfifo_signal_limit_do)? { `PREFETCH_GP_FAULT, 32'd0 } :
+                 (prefetchfifo_signal_pf_do)?    { `PREFETCH_PF_FAULT, 32'd0 } :
+                                                     prefetchfifo_write_data),                          //input [35:0]
     
     
     .empty      (empty),                    //output
     .full       (prefetchfifo_used[4]),     //output
-    .q          (q),                        //output [135:0]
+    .q          (q),                        //output [35:0]
     .usedw      (prefetchfifo_used[3:0])    //output [3:0]
 );
 

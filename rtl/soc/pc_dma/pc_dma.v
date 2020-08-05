@@ -50,7 +50,7 @@ module pc_dma(
     input       [7:0]   master_writedata,
     
     //master
-    output reg  [31:0]  avm_address,
+    output reg  [23:0]  avm_address,
     input               avm_waitrequest,
     output reg          avm_read,
     input               avm_readdatavalid,
@@ -72,12 +72,6 @@ module pc_dma(
     output reg  [7:0]   dma_soundblaster_readdata,
     input       [7:0]   dma_soundblaster_writedata
 );
-
-//------------------------------------------------------------------------------
-
-`define SDRAM_BASE      32'h08000000
-
-//------------------------------------------------------------------------------
 
 reg slave_read_last;
 always @(posedge clk or negedge rst_n) begin if(rst_n == 1'b0) slave_read_last <= 1'b0; else if(slave_read_last) slave_read_last <= 1'b0; else slave_read_last <= slave_read; end 
@@ -292,7 +286,7 @@ wire [3:0] sla_writedata_bits =
                                         4'b1000;
 
 wire [3:0] sla_pending_next =
-    { sla_pending[3], dma_floppy_req | dma_floppy_state != 3'd0, dma_soundblaster_req | dma_soundblaster_state != 3'd0, sla_pending[0] };
+    { sla_pending[3], dma_floppy_req | (dma_floppy_state != 3'd0 && dma_floppy_state != 3'd5), dma_soundblaster_req | (dma_soundblaster_state != 3'd0 && dma_soundblaster_state != 3'd5), sla_pending[0] };
 
 reg [3:0] sla_pending;
 always @(posedge clk or negedge rst_n) begin
@@ -362,8 +356,8 @@ wire dma_floppy_tc     = dma_floppy_update && sla_current_counter_2 == 16'h0000;
 wire dma_soundblaster_update = dma_soundblaster_state == 3'd4;
 wire dma_soundblaster_tc     = dma_soundblaster_update && sla_current_counter_1 == 16'h0000;
 
-wire dma_floppy_start       = sla_disabled == 1'b0 && dma_floppy_state == 3'd0 && dma_soundblaster_state == 3'd0 && sla_pending[2] && ~(sla_mask[2]) && (sla_pending[1] == 1'b0 || sla_mask[1]);
-wire dma_soundblaster_start = sla_disabled == 1'b0 && dma_floppy_state == 3'd0 && dma_soundblaster_state == 3'd0 && sla_pending[1] && ~(sla_mask[1]);
+wire dma_floppy_start       = sla_disabled == 1'b0 && dma_floppy_state == 3'd0       && sla_pending[2] && ~sla_mask[2] && (~sla_pending[1] || sla_mask[1]);
+wire dma_soundblaster_start = sla_disabled == 1'b0 && dma_soundblaster_state == 3'd0 && sla_pending[1] && ~sla_mask[1] && (~sla_pending[2] || sla_mask[2]);
 
 always @(posedge clk or negedge rst_n) begin
     if(rst_n == 1'b0)                                   dma_floppy_terminal <= 1'b0;
@@ -389,7 +383,7 @@ always @(posedge clk or negedge rst_n) begin
     
     else if(dma_floppy_state == 3'd4 && dma_floppy_tc)              dma_floppy_state <= 3'd0;
     else if(dma_floppy_state == 3'd4 && ~(dma_floppy_tc))           dma_floppy_state <= 3'd5;
-    else if(dma_floppy_state == 3'd5 && dma_floppy_req)             dma_floppy_state <= 3'd1;
+    else if(dma_floppy_state == 3'd5 && dma_floppy_req && (~sla_pending[1] || sla_mask[1])) dma_floppy_state <= 3'd1;
     
     else if(dma_floppy_state == 3'd1 && sla_transfer_2 == 2'd1)     dma_floppy_state <= 3'd6; //write avm
     else if(dma_floppy_state == 3'd6 && avm_waitrequest == 1'b0)    dma_floppy_state <= 3'd4;
@@ -411,7 +405,7 @@ always @(posedge clk or negedge rst_n) begin
     
     else if(dma_soundblaster_state == 3'd4 && dma_soundblaster_tc)      dma_soundblaster_state <= 3'd0;
     else if(dma_soundblaster_state == 3'd4 && ~(dma_soundblaster_tc))   dma_soundblaster_state <= 3'd5;
-    else if(dma_soundblaster_state == 3'd5 && dma_soundblaster_req)     dma_soundblaster_state <= 3'd1;
+    else if(dma_soundblaster_state == 3'd5 && dma_soundblaster_req && (~sla_pending[2] || sla_mask[2])) dma_soundblaster_state <= 3'd1;
     
     else if(dma_soundblaster_state == 3'd1 && sla_transfer_1 == 2'd1)   dma_soundblaster_state <= 3'd6; //write avm
     else if(dma_soundblaster_state == 3'd6 && avm_waitrequest == 1'b0)  dma_soundblaster_state <= 3'd4;
@@ -442,9 +436,9 @@ always @(posedge clk or negedge rst_n) begin if(rst_n == 1'b0) dma_soundblaster_
 //------------------------------------------------------------------------------
 
 always @(posedge clk or negedge rst_n) begin
-    if(rst_n == 1'b0)                       avm_address <= `SDRAM_BASE | 32'd0;
-    else if(dma_soundblaster_state == 3'd1) avm_address <= `SDRAM_BASE | { 8'd0, sla_page_1, sla_current_address_1 };
-    else if(dma_floppy_state == 3'd1)       avm_address <= `SDRAM_BASE | { 8'd0, sla_page_2, sla_current_address_2 };
+    if(rst_n == 1'b0)                       avm_address <= 24'd0;
+    else if(dma_soundblaster_state == 3'd1) avm_address <= { sla_page_1, sla_current_address_1 };
+    else if(dma_floppy_state == 3'd1)       avm_address <= { sla_page_2, sla_current_address_2 };
 end
 
 
@@ -585,7 +579,7 @@ wire [3:0] mas_writedata_bits =
                                         4'b1000;
 
 wire [3:0] mas_pending_next =
-    { mas_pending[3:1], dma_floppy_start || dma_soundblaster_start || dma_floppy_state != 3'd0 || dma_soundblaster_state != 3'd0 };
+    { mas_pending[3:1], sla_pending_next[1] | sla_pending_next[0] };
 
 reg [3:0] mas_pending;
 always @(posedge clk or negedge rst_n) begin

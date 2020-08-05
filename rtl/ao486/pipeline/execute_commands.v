@@ -121,6 +121,7 @@ module execute_commands(
     input       [10:0]  exe_mutex_current,
     
     input       [31:0]  exe_eip,
+    input       [31:0]  e_eip_next_sum,
     input       [31:0]  exe_extra,
     input       [31:0]  exe_linear,
     input       [6:0]   exe_cmd,
@@ -379,13 +380,6 @@ assign task_eip   = (glob_descriptor[`DESC_BITS_TYPE] <= 4'd3)? { 16'd0, exe_buf
 
 //------------------------------------------------------------------------------ Jcc, JCXZ, LOOP
 
-wire [31:0] e_eip_next_sum;
-    
-assign e_eip_next_sum =
-    (exe_is_8bit)?          exe_eip + { {24{exe_decoder[15]}}, exe_decoder[15:8] } :
-    (exe_operand_16bit)?    exe_eip + { {16{exe_decoder[23]}}, exe_decoder[23:8] } :
-                            exe_eip + exe_decoder[39:8];
-
 assign exe_branch_eip =
     (exe_operand_16bit)?    { 16'd0, e_eip_next_sum[15:0] } :
                             e_eip_next_sum;
@@ -407,6 +401,9 @@ condition exe_condition_inst(
 );
 
 //------------------------------------------------------------------------------
+
+wire [15:0] e_aaa_sum_ax;
+wire [15:0] e_aas_sub_ax;
 
 // synthesis translate_off
 wire _unused_ok = &{ 1'b0, edx[31:16], tr_cache[63:44], tr_cache[39:0], exe_mutex_current[9], exe_mutex_current[7:5], exe_mutex_current[3], exe_mutex_current[1],
