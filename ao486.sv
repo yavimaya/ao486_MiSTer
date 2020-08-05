@@ -196,14 +196,14 @@ localparam CONF_STR =
 	"-;",
 	"O1,Aspect ratio,4:3,16:9;",
 	"O4,VSync,60Hz,Variable;",
-	"O8,16/24bit mode,BGR,RGB;",
-	"O9,16bit format,1555,565;",
-	"-;",
-	"O3,FM mode,OPL2,OPL3;",
 	"-;",
 	"OUV,UserIO Joystick,Off,DB9MD,DB15 ;",
 	"OT,UserIO Players, 1 Player,2 Players;",
 	"-;",
+	"O8,16/24bit mode,BGR,RGB;",
+	"O9,16bit format,1555,565;",
+	"-;",
+	"O3,FM mode,OPL2,OPL3;",
 	"OCD,Joystick type,2 Buttons,4 Buttons,Gravis Pro;",
 	"-;",
 	"OB,RAM Size,256MB,16MB;",
@@ -235,8 +235,8 @@ wire [31:0] status;
 
 reg         ioctl_wait = 0;
 
-wire [13:0] joystick_0;
-wire [13:0] joystick_1;
+wire [13:0] joystick_0_USB;
+wire [13:0] joystick_1_USB;
 wire [15:0] joystick_analog_0;
 wire [15:0] joystick_analog_1;
 
