@@ -348,17 +348,37 @@ hps_ext hps_ext
 	.ext_midi(midi_en),
 
 	.ext_hdd_writedata(hdd_writedata),
-	.ext_hdd_readdata(mgmt_addr[0] ? hdd1_readdata : hdd0_readdata),
+	.ext_hdd_readdata(hdd_readdata),
 	.ext_hdd_write(hdd_write),
 	.ext_hdd_read(hdd_read),
 
 	.ext_req(mgmt_req)
 );
 
+reg [15:0] hdd0_writedata;
+reg        hdd0_write;
+reg        hdd0_read;
+reg [15:0] hdd1_writedata;
+reg        hdd1_write;
+reg        hdd1_read;
+reg [15:0] hdd_readdata;
+
+always @(posedge clk_sys) begin
+	hdd0_writedata <= hdd_writedata;
+	hdd0_write     <= hdd_write & ~mgmt_addr[0];
+	hdd0_read      <= hdd_read & ~mgmt_addr[0];
+
+	hdd1_writedata <= hdd_writedata;
+	hdd1_write     <= hdd_write & mgmt_addr[0];
+	hdd1_read      <= hdd_read & mgmt_addr[0];
+
+	hdd_readdata   <= mgmt_addr[0] ? hdd1_readdata : hdd0_readdata;
+end
+
 //------------------------------------------------------------------------------
 
 wire clk_sys, clk_uart, clk_opl;
-wire [31:0] cur_rate;
+reg [27:0] cur_rate;
 
 `ifdef DEBUG
 
@@ -370,7 +390,7 @@ pll2 pll
 	.outclk_2(clk_opl)
 );
 
-assign cur_rate = 30000000;
+always @(posedge clk_sys) cur_rate <= 30000000;
 
 `else
 
@@ -476,7 +496,7 @@ always @(posedge CLK_50M) begin
 	end
 end
 
-assign cur_rate = clk_rate[status[7:5]];
+always @(posedge clk_sys) cur_rate <= clk_rate[status[7:5]];
 
 `endif
 
@@ -595,6 +615,9 @@ assign FB_HEIGHT      = fb_height;
 assign FB_STRIDE      = fb_stride;
 assign FB_FORCE_BLANK = fb_off;
 
+reg f60;
+always @(posedge clk_sys) f60 <= fb_en || (fb_width >= 800);
+
 system u0
 (
 	.clk_sys_clk          (clk_sys),
@@ -603,7 +626,7 @@ system u0
 	.qsys_reset_reset     (sys_reset),
 
 	.video_ce             (CE_PIXEL),
-	.video_mode           (status[4]),
+	.video_f60            (~status[4] | f60),
 	.video_blank_n        (de),
 	.video_hsync          (HSync),
 	.video_vsync          (VSync),
@@ -623,13 +646,16 @@ system u0
 	.video_height         (vga_height),
 	.video_flags          (vga_flags),
 	.video_off            (vga_off),
+	.video_clock_rate     (cur_rate),
 
 	.sound_sample_l       (sb_out_l),
 	.sound_sample_r       (sb_out_r),
 	.sound_fm_mode        (status[3]),
+	.sound_clock_rate     (cur_rate),
 	
 	.speaker_enable       (speaker_ena),
 	.speaker_out          (speaker_out),
+	.speaker_clock_rate   (cur_rate),
 
 	.ps2_misc_a20_enable  (),
 	.ps2_misc_reset_n     (ps2_reset_n),
@@ -670,6 +696,7 @@ system u0
 	.vga_writedata        (vga_writedata),
 
 	.rtc_memcfg           (memcfg),
+	.rtc_clock_rate       (cur_rate),
 
 	.mgmt_waitrequest     (mgmt_wait),
 	.mgmt_readdata        (mgmt_data),
@@ -683,15 +710,15 @@ system u0
 	.mgmt_debugaccess     (0),
 
 	.hdd0_dat_request     (mgmt_req[2:0]),
-	.hdd0_dat_read        (hdd_read & ~mgmt_addr[0]),
-	.hdd0_dat_write       (hdd_write & ~mgmt_addr[0]),
-	.hdd0_dat_writedata   (hdd_writedata),
+	.hdd0_dat_read        (hdd0_read),
+	.hdd0_dat_write       (hdd0_write),
+	.hdd0_dat_writedata   (hdd0_writedata),
 	.hdd0_dat_readdata    (hdd0_readdata),
 
 	.hdd1_dat_request     (mgmt_req[5:3]),
-	.hdd1_dat_read        (hdd_read & mgmt_addr[0]),
-	.hdd1_dat_write       (hdd_write & mgmt_addr[0]),
-	.hdd1_dat_writedata   (hdd_writedata),
+	.hdd1_dat_read        (hdd1_read),
+	.hdd1_dat_write       (hdd1_write),
+	.hdd1_dat_writedata   (hdd1_writedata),
 	.hdd1_dat_readdata    (hdd1_readdata),
 
 	.fdd0_request         (mgmt_req[7:6]),
