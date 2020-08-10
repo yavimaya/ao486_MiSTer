@@ -67,8 +67,6 @@ module memory(
     input               tlbcheck_rw,
     //END
     
-    output              dcache_busy,
-    
     //RESP:
     input               tlbflushsingle_do,
     output              tlbflushsingle_done,
@@ -151,10 +149,9 @@ module memory(
     
     input       [23:0]  dma_address,
     input               dma_write,
-    input       [31:0]  dma_writedata,
-    input       [3:0]   dma_byteenable,
+    input        [7:0]  dma_writedata,
     input               dma_read,
-    output      [31:0]  dma_readdata,
+    output       [7:0]  dma_readdata,
     output              dma_readdatavalid,
     output              dma_waitrequest
 );
@@ -380,7 +377,6 @@ avalon_mem avalon_mem_inst(
     .dma_address                (dma_address),
     .dma_write                  (dma_write),
     .dma_writedata              (dma_writedata),
-    .dma_byteenable             (dma_byteenable),
     .dma_read                   (dma_read),
     .dma_readdata               (dma_readdata),
     .dma_readdatavalid          (dma_readdatavalid),
@@ -391,7 +387,6 @@ avalon_mem avalon_mem_inst(
 
 assign invddata_done = 1'b1;
 assign wbinvddata_done = 1'b1;
-assign dcache_busy = 1'b0;
 
 //------------------------------------------------------------------------------
 icache icache_inst(
