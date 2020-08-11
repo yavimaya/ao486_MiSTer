@@ -32,6 +32,7 @@ module uart (
 	output           br_out,
 	output           dtr_n,
 
+	input            midi_rate,
 	output           irq_uart,
 	output           irq_mpu
 );
@@ -39,24 +40,19 @@ module uart (
 assign irq_uart = ~mpu_mode_r & irq;
 assign irq_mpu  = read_ack | (mpu_mode_r & ~rx_empty);
 
-reg read_ack, mpu_mode_r;
-wire irq, rx_empty, tx_full;
-
-wire [7:0] data;
-
-wire [7:0] mpu_status = {~(read_ack | ~rx_empty), tx_full, 6'd0};
-wire cmd_reset = mpu_cs && write && address[0] && (writedata == 'hFF);
-
 wire xCR_write = uart_cs && write && (address == 2 || address == 3);
 wire mpu_mode = mpu_mode_r & ~xCR_write;
 
 wire uart_strobe = mpu_mode ? (mpu_cs & ~address[0] & ((read & ~read_ack) | write)) : (uart_cs & (read | write));
 
-gh_uart_16550 uart
+wire irq, rx_empty, tx_empty;
+wire [7:0] data;
+
+gh_uart_16550 uart_16550
 (
 	.clk(clk),
 	.BR_clk(br_clk),
-	.rst(reset | cmd_reset),
+	.rst(reset),
 	.CS(uart_strobe),
 	.WR(write),
 	.ADD(address),
@@ -76,33 +72,36 @@ gh_uart_16550 uart
 	.RTSn(rts_n),
 	.IRQ(irq),
 
+	.DIV2(midi_rate),
 	.MPU_MODE(mpu_mode),
-	.TX_Empty(),
-	.TX_Full(tx_full),
+	.TX_Empty(tx_empty),
 	.RX_Empty(rx_empty)
 );
 
+reg read_ack;
+reg mpu_mode_r;
+reg mpu_dumb;
 always @(posedge clk or posedge reset) begin
 	if(reset) begin
 		mpu_mode_r <= 0;
 		read_ack <= 0;
+		mpu_dumb <= 0;
 	end
 	else begin
 		if(read & uart_cs) readdata <= data;
-		if(read & mpu_cs)  readdata <= address[0] ? mpu_status : read_ack ? 8'hFE : data;
+		if(read & mpu_cs)  readdata <= address[0] ? {~(read_ack | ~rx_empty), ~tx_empty, 6'd0} : read_ack ? 8'hFE : data;
 
 		if(write & mpu_cs & address[0]) begin
-			case (writedata)
-				'hFF:    begin mpu_mode_r <= 0; read_ack <= ~mpu_mode_r; end
-				'h3F:    begin mpu_mode_r <= 1; read_ack <= 1;           end
-				default: begin mpu_mode_r <= 1; read_ack <= 1;           end  //answer to any command, fake smart mode
-			endcase
+			mpu_mode_r <= 1;
+			read_ack <= ~mpu_dumb;
+			if(writedata == 8'hFF) mpu_dumb <= 0;
+			if(writedata == 8'h3F) mpu_dumb <= 1;
 		end
 
-		if(mpu_cs & read & ~address[0]) read_ack   <= 0;
+		if(mpu_cs & read & ~address[0]) read_ack <= 0;
 
 		// write to FCR or LCR to switch MPU off
-		if(xCR_write) mpu_mode_r <= 0;
+		if(xCR_write) {mpu_mode_r, mpu_dumb} <= 0;
 	end
 end
 

@@ -47,6 +47,7 @@ module system
 	input         serial_dsr_n,
 	output        serial_rts_n,
 	output        serial_dtr_n,
+	input         serial_midi_rate,
 
 	output [15:0] sound_sample_l,
 	output [15:0] sound_sample_r,
@@ -96,18 +97,6 @@ wire        dma_soundblaster_terminal;
 wire  [7:0] dma_soundblaster_readdata;
 wire  [7:0] dma_soundblaster_writedata;
 wire        dma_soundblaster_ack;
-wire  [7:0] ide_3f6_readdata;
-wire  [7:0] ide_3f6_writedata;
-wire        ide_3f6_write;
-wire        ide_3f6_read;
-wire  [7:0] ide_370_readdata;
-wire  [7:0] ide_370_writedata;
-wire        ide_370_write;
-wire        ide_370_read;
-wire        speaker_61h_read;
-wire        speaker_61h_write;
-wire  [7:0] speaker_61h_readdata;
-wire  [7:0] speaker_61h_writedata;
 wire  [7:0] dma_readdata;
 wire        dma_waitrequest;
 wire [23:0] dma_address;
@@ -149,12 +138,10 @@ wire        iobus_write;
 wire        iobus_read;
 wire  [2:0] iobus_datasize;
 wire [31:0] iobus_writedata;
-reg   [7:0] iobus_readdata8;
 
 reg         hdd0_cs;
 reg         hdd1_cs;
 reg         floppy0_cs;
-reg         hdd1_ext_cs;
 reg         dma_master_cs;
 reg         dma_page_cs;
 reg         dma_slave_cs;
@@ -177,7 +164,6 @@ wire  [7:0] sound_readdata;
 wire  [7:0] floppy0_readdata;
 wire [31:0] hdd0_readdata;
 wire [31:0] hdd1_readdata;
-wire  [7:0] hdd1_ext_readdata;
 wire  [7:0] joystick_readdata;
 wire  [7:0] pit_readdata;
 wire  [7:0] ps2_readdata;
@@ -287,17 +273,16 @@ ao486 ao486
 );
 
 always @(posedge clk_sys) begin
-	hdd0_cs       <= ({iobus_address[15:3], 3'd0} == 16'h01F0);
-	hdd1_cs       <= ({iobus_address[15:3], 3'd0} == 16'h0170);
+	hdd0_cs       <= ({iobus_address[15:3], 3'd0} == 16'h01F0) || (iobus_address == 16'h03F6);
+	hdd1_cs       <= ({iobus_address[15:3], 3'd0} == 16'h0170) || (iobus_address == 16'h0376);
 	joy_cs        <= ({iobus_address[15:0]      } == 16'h0201);
 	floppy0_cs    <= ({iobus_address[15:3], 3'd0} == 16'h03F0);
-	hdd1_ext_cs   <= ({iobus_address[15:3], 3'd0} == 16'h0370);
 	dma_master_cs <= ({iobus_address[15:5], 5'd0} == 16'h00C0);
 	dma_page_cs   <= ({iobus_address[15:4], 4'd0} == 16'h0080);
 	dma_slave_cs  <= ({iobus_address[15:4], 4'd0} == 16'h0000);
 	pic_master_cs <= ({iobus_address[15:1], 1'd0} == 16'h0020);
 	pic_slave_cs  <= ({iobus_address[15:1], 1'd0} == 16'h00A0);
-	pit_cs        <= ({iobus_address[15:2], 2'd0} == 16'h0040);
+	pit_cs        <= ({iobus_address[15:2], 2'd0} == 16'h0040) || (iobus_address == 16'h0061);
 	ps2_io_cs     <= ({iobus_address[15:3], 3'd0} == 16'h0060);
 	ps2_ctl_cs    <= ({iobus_address[15:4], 4'd0} == 16'h0090);
 	rtc_cs        <= ({iobus_address[15:1], 1'd0} == 16'h0070);
@@ -310,20 +295,18 @@ always @(posedge clk_sys) begin
 	vga_d_cs      <= ({iobus_address[15:4], 4'd0} == 16'h03D0);
 end
 
-always @* begin
-	     if( floppy0_cs                             ) iobus_readdata8 = floppy0_readdata;
-	else if( hdd1_ext_cs                            ) iobus_readdata8 = hdd1_ext_readdata;
-	else if( dma_master_cs|dma_slave_cs|dma_page_cs ) iobus_readdata8 = dma_io_readdata;
-	else if( pic_master_cs|pic_slave_cs             ) iobus_readdata8 = pic_readdata;
-	else if( pit_cs                                 ) iobus_readdata8 = pit_readdata;
-	else if( ps2_io_cs|ps2_ctl_cs                   ) iobus_readdata8 = ps2_readdata;
-	else if( rtc_cs                                 ) iobus_readdata8 = rtc_readdata;
-	else if( sb_cs|fm_cs                            ) iobus_readdata8 = sound_readdata;
-	else if( uart_cs|mpu_cs                         ) iobus_readdata8 = uart_readdata;
-	else if( vga_b_cs|vga_c_cs|vga_d_cs             ) iobus_readdata8 = vga_io_readdata;
-	else if( joy_cs                                 ) iobus_readdata8 = joystick_readdata;
-	else                                              iobus_readdata8 = 8'hFF;
-end
+wire [7:0] iobus_readdata8 =
+	( floppy0_cs                             ) ? floppy0_readdata  :
+	( dma_master_cs|dma_slave_cs|dma_page_cs ) ? dma_io_readdata   :
+	( pic_master_cs|pic_slave_cs             ) ? pic_readdata      :
+	( pit_cs                                 ) ? pit_readdata      :
+	( ps2_io_cs|ps2_ctl_cs                   ) ? ps2_readdata      :
+	( rtc_cs                                 ) ? rtc_readdata      :
+	( sb_cs|fm_cs                            ) ? sound_readdata    :
+	( uart_cs|mpu_cs                         ) ? uart_readdata     :
+	( vga_b_cs|vga_c_cs|vga_d_cs             ) ? vga_io_readdata   :
+	( joy_cs                                 ) ? joystick_readdata :
+	                                             8'hFF;
 
 iobus iobus
 (
@@ -344,7 +327,7 @@ iobus iobus
 	.bus_address       (iobus_address),
 	.bus_write         (iobus_write),
 	.bus_read          (iobus_read),
-	.bus_io32          (hdd0_cs | hdd1_cs),
+	.bus_io32          ((hdd0_cs | hdd1_cs) & ~iobus_address[9]),
 	.bus_datasize      (iobus_datasize),
 	.bus_writedata     (iobus_writedata),
 	.bus_readdata      (hdd0_cs ? hdd0_readdata : hdd1_cs ? hdd1_readdata : iobus_readdata8)
@@ -404,11 +387,6 @@ floppy floppy0
 	.dma_readdata         (dma_floppy_readdata),
 	.dma_writedata        (dma_floppy_writedata),
 
-	.ide_3f6_read         (ide_3f6_read),
-	.ide_3f6_readdata     (ide_3f6_readdata),
-	.ide_3f6_write        (ide_3f6_write),
-	.ide_3f6_writedata    (ide_3f6_writedata),
-
 	.mgmt_address         (mgmt_ctl_address[3:0]),
 	.mgmt_write           (mgmt_ctl_write & mgmt_fdd0_cs),
 	.mgmt_writedata       (mgmt_ctl_writedata),
@@ -424,17 +402,12 @@ hdd hdd0
 	.clk               (clk_sys),
 	.rst_n             (~reset_sys),
 
-	.io_address        (iobus_address[2:0]),
+	.io_address        ({iobus_address[9],iobus_address[2:0]}),
 	.io_writedata      (iobus_writedata),
 	.io_data_size      (iobus_datasize),
 	.io_read           (iobus_read & hdd0_cs),
 	.io_write          (iobus_write & hdd0_cs),
 	.io_readdata       (hdd0_readdata),
-
-	.ide_3f6_read      (ide_3f6_read),
-	.ide_3f6_readdata  (ide_3f6_readdata),
-	.ide_3f6_write     (ide_3f6_write),
-	.ide_3f6_writedata (ide_3f6_writedata),
 
 	.mgmt_address      (mgmt_ctl_address[3:0]),
 	.mgmt_write        (mgmt_ctl_write & mgmt_hdd0_cs),
@@ -451,17 +424,12 @@ hdd hdd1
 	.clk               (clk_sys),
 	.rst_n             (~reset_sys),
 
-	.io_address        (iobus_address[2:0]),
+	.io_address        ({iobus_address[9],iobus_address[2:0]}),
 	.io_writedata      (iobus_writedata),
 	.io_data_size      (iobus_datasize),
 	.io_read           (iobus_read & hdd1_cs),
 	.io_write          (iobus_write & hdd1_cs),
 	.io_readdata       (hdd1_readdata),
-
-	.ide_3f6_read      (ide_370_read),
-	.ide_3f6_readdata  (ide_370_readdata),
-	.ide_3f6_write     (ide_370_write),
-	.ide_3f6_writedata (ide_370_writedata),
 
 	.mgmt_address      (mgmt_ctl_address[3:0]),
 	.mgmt_write        (mgmt_ctl_write & mgmt_hdd1_cs),
@@ -471,23 +439,6 @@ hdd hdd1
 
 	.request           (hdd1_request),
 	.irq               (irq_15)
-);
-
-hddext hdd1_ext
-(
-	.clk               (clk_sys),
-	.rst_n             (~reset_sys),
-
-	.io_address        (iobus_address[2:0]),
-	.io_writedata      (iobus_writedata[7:0]),
-	.io_read           (iobus_read & hdd1_ext_cs),
-	.io_write          (iobus_write & hdd1_ext_cs),
-	.io_readdata       (hdd1_ext_readdata),
-
-	.ide_3f6_read      (ide_370_read),
-	.ide_3f6_readdata  (ide_370_readdata),
-	.ide_3f6_write     (ide_370_write),
-	.ide_3f6_writedata (ide_370_writedata)
 );
 
 joystick joystick
@@ -514,18 +465,13 @@ pit pit
 
 	.clock_rate            (clock_rate),
 
-	.io_address            (iobus_address[1:0]),
+	.io_address            ({iobus_address[5],iobus_address[1:0]}),
 	.io_writedata          (iobus_writedata[7:0]),
 	.io_read               (iobus_read & pit_cs),
 	.io_write              (iobus_write & pit_cs),
 	.io_readdata           (pit_readdata),
 
-	.speaker_61h_read      (speaker_61h_read),
-	.speaker_61h_readdata  (speaker_61h_readdata),
-	.speaker_61h_write     (speaker_61h_write),
-	.speaker_61h_writedata (speaker_61h_writedata),
 	.speaker_out           (speaker_out),
-
 	.irq                   (irq_0)
 );
 
@@ -551,11 +497,6 @@ ps2 ps2
 	.ps2_mousedat          (ps2_mousedat_in),
 	.ps2_mouseclk_out      (ps2_mouseclk_out),
 	.ps2_mousedat_out      (ps2_mousedat_out),
-
-	.speaker_61h_read      (speaker_61h_read),
-	.speaker_61h_readdata  (speaker_61h_readdata),
-	.speaker_61h_write     (speaker_61h_write),
-	.speaker_61h_writedata (speaker_61h_writedata),
 
 	.output_a20_enable     (),
 	.output_reset_n        (ps2_reset_n),
@@ -640,6 +581,8 @@ uart uart
 	.dtr_n          (serial_dtr_n),
 	.br_out         (),
 	.ri_n           (1),
+	
+	.midi_rate      (serial_midi_rate),
 
 	.irq_uart       (irq_4),
 	.irq_mpu        (irq_9)
@@ -725,7 +668,6 @@ always @* begin
 	interrupt[14] = irq_14;
 	interrupt[15] = irq_15;
 end
-
 
 always @(posedge clk_sys) begin
 	mgmt_hdd0_cs <= (mgmt_address[15:8] == 8'hF0);
