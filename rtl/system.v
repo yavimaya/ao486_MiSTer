@@ -1,9 +1,7 @@
 
 module system
 (
-	input         clk_opl,
 	input         clk_sys,
-	input         clk_uart,
 
 	input         reset_cpu,
 	input         reset_sys,
@@ -40,6 +38,7 @@ module system
 
 	input         memcfg,
 
+	input         clk_uart,
 	input         serial_rx,
 	output        serial_tx,
 	input         serial_cts_n,
@@ -49,11 +48,15 @@ module system
 	output        serial_dtr_n,
 	input         serial_midi_rate,
 
+	input         clk_opl,
 	output [15:0] sound_sample_l,
 	output [15:0] sound_sample_r,
 	input         sound_fm_mode,
 
 	output        speaker_out,
+
+	input         clk_vga,
+	input  [27:0] clock_rate_vga,
 
 	output        video_ce,
 	output        video_blank_n,
@@ -73,6 +76,7 @@ module system
 	output [8:0]  video_stride,
 	output        video_off,
 	input         video_fb_en,
+	input         video_lores,
 
 	output        DDRAM_CLK,
 	input         DDRAM_BUSY,
@@ -593,7 +597,8 @@ vga vga
 	.clk_sys        (clk_sys),
 	.rst_n          (~reset_sys),
 
-	.clock_rate     (clock_rate),
+	.clk_vga        (clk_vga),
+	.clock_rate_vga (clock_rate_vga),
 
 	.io_address     (iobus_address[3:0]),
 	.io_writedata   (iobus_writedata[7:0]),
@@ -630,6 +635,7 @@ vga vga
 	.vga_flags      (video_flags),
 	.vga_stride     (video_stride),
 	.vga_off        (video_off),
+	.vga_lores      (video_lores),
 
 	.irq            (irq_2)
 );

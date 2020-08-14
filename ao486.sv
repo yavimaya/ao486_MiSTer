@@ -2,7 +2,7 @@
 //  ao486
 // 
 //  Port to MiSTer.
-//  Copyright (C) 2017-2019 Alexey Melnikov
+//  Copyright (C) 2017-2020 Alexey Melnikov
 //
 //  This program is free software; you can redistribute it and/or modify it
 //  under the terms of the GNU General Public License as published by the Free
@@ -171,8 +171,8 @@ assign VIDEO_ARY = status[1] ? 8'd9  : 8'd3;
 
 assign AUDIO_S   = 1;
 assign AUDIO_MIX = 0;
-assign AUDIO_L   = sb_out_l + {2'b00, {14{speaker_out}}};
-assign AUDIO_R   = sb_out_r + {2'b00, {14{speaker_out}}};
+assign AUDIO_L   = sb_out_l + {1'b0, speaker_out, 14'd0};
+assign AUDIO_R   = sb_out_r + {1'b0, speaker_out, 14'd0};
 
 assign LED_DISK[1] = 0;
 assign LED_POWER   = 0;
@@ -186,7 +186,6 @@ led fdd_led(clk_sys, |mgmt_req[7:6], LED_USER);
 localparam CONF_STR =
 {
 	"AO486;;",
-	"-;",
 	"S0,IMG,Mount Floppy;",
 	"-;",
 	"S2,VHD,Mount Primary HDD;",
@@ -194,24 +193,33 @@ localparam CONF_STR =
 	"-;",
 	"OX2,Boot order,FDD/HDD,HDD/FDD;",
 	"-;",
-	"O1,Aspect ratio,4:3,16:9;",
-	"O4,VSync,60Hz,Variable;",
-	"O8,16/24bit mode,BGR,RGB;",
-	"O9,16bit format,1555,565;",
-	"-;",
-	"O3,FM mode,OPL2,OPL3;",
-	"-;",
-	"OUV,UserIO Joystick,Off,DB9MD,DB15 ;",
-	"OT,UserIO Players, 1 Player,2 Players;",
+	
+	"P1,Audio & Video;",
+	"P1-;",
+	"P1O1,Aspect ratio,4:3,16:9;",
+	"P1O4,VSync,60Hz,Variable;",
+	"P1O8,16/24bit mode,BGR,RGB;",
+	"P1O9,16bit format,1555,565;",
+	"P1OE,Low-Res,Native,4x;",
+	"P1-;",
+	"P1O3,FM mode,OPL2,OPL3;",
+
+	"P2,Hardware;",
+	"P2-;",
+	"P2OUV,UserIO Joystick,Off,DB9MD,DB15 ;",
+	"P2OT,UserIO Players, 1 Player,2 Players;",
+	"P2-;",
+	"P2OB,RAM Size,256MB,16MB;",
+`ifndef DEBUG
+	"P2-;",
+	"D1P2O56,CPU Clock,90MHz,15MHz,30MHz,56MHz;",
+	"h0P2O7,Overclock,Off,100Mhz;",
+	"P2-;",
+	"P2OA,UART Speed,Normal,30x;",
+`endif
+
 	"-;",
 	"OCD,Joystick type,2 Buttons,4 Buttons,Gravis Pro;",
-	"-;",
-	"OB,RAM Size,256MB,16MB;",
-`ifndef DEBUG
-	"D1O56,Speed,90MHz,15MHz,30MHz,56MHz;",
-	"h0O7,Turbo 100Mhz,Off,On;",
-	"OA,UART Speed,Normal,30x;",
-`endif
 	"-;",
 	"R0,Reset and apply HDD;",
 	"J,Button 1,Button 2,Button 3,Button 4,Start,Select,R1,L1,R2,L2;",
@@ -220,7 +228,8 @@ localparam CONF_STR =
 };
 
 
-//////////////////   MIST ARM I/O   ///////////////////
+//------------------------------------------------------------------------------
+
 wire        ps2_kbd_clk_out;
 wire        ps2_kbd_data_out;
 wire        ps2_kbd_clk_in;
@@ -341,7 +350,7 @@ hps_ext hps_ext
 
 //------------------------------------------------------------------------------
 
-wire clk_sys, clk_uart, clk_opl;
+wire clk_sys, clk_uart, clk_opl, clk_vga;
 reg [27:0] cur_rate;
 
 `ifdef DEBUG
@@ -349,9 +358,10 @@ reg [27:0] cur_rate;
 pll2 pll
 (
 	.refclk(CLK_50M),
-	.outclk_0(clk_sys)
+	.outclk_0(clk_vga)
 	.outclk_1(clk_uart),
 	.outclk_2(clk_opl)
+	.outclk_3(clk_sys)
 );
 
 always @(posedge clk_sys) cur_rate <= 30000000;
@@ -366,6 +376,7 @@ pll pll
 	.outclk_0(clk_sys),
 	.outclk_1(clk_uart),
 	.outclk_2(clk_opl),
+	.outclk_3(clk_vga),
 	.locked(pll_locked),
 	.reconfig_to_pll(reconfig_to_pll),
 	.reconfig_from_pll(reconfig_from_pll)
@@ -482,23 +493,19 @@ wire        ps2_reset_n;
 wire        speaker_out;
 wire [15:0] sb_out_l, sb_out_r;
 
-wire        device;
-
-wire        de;
-reg  [15:0] ded;
-always @(posedge CLK_VIDEO) if(CE_PIXEL) ded <= (ded<<1) | de;
-
 assign VGA_F1 = 0;
 assign VGA_SL = 0;
-assign CLK_VIDEO = clk_sys;
+assign CLK_VIDEO = clk_vga;
+assign CE_PIXEL = vga_ce & vga_out_en;
 
 wire [7:0] r,g,b;
 wire       HSync,VSync;
+wire       ce_pix;
 
 video_cleaner video_cleaner
 (
 	.clk_vid(CLK_VIDEO),
-	.ce_pix(CE_PIXEL),
+	.ce_pix(vga_ce),
 
 	.R(r),
 	.G(g),
@@ -506,7 +513,7 @@ video_cleaner video_cleaner
 
 	.HSync(HSync),
 	.VSync(VSync),
-	.DE_in(de & ded[15]),
+	.DE_in(vga_de),
 
 	.VGA_R(R),
 	.VGA_G(G),
@@ -547,6 +554,26 @@ wire  [8:0] vga_stride;
 wire [10:0] vga_height;
 wire  [3:0] vga_flags;
 wire        vga_off;
+wire        vga_ce;
+wire        vga_de;
+wire        vga_lores = ~status[14];
+
+reg vga_out_en;
+always @(posedge clk_vga) begin
+	reg old_hs, old_vs;
+	
+	if(vga_flags[3] & vga_lores) begin
+		old_hs <= HSync;
+		if(~old_hs & HSync) begin
+			old_vs <= VSync;
+			vga_out_en <= ~vga_out_en;
+			if(~old_vs & VSync) vga_out_en <= 0;
+		end
+	end
+	else begin
+		vga_out_en <= 1;
+	end
+end
 
 reg         fb_en;
 reg  [31:0] fb_base;
@@ -580,7 +607,7 @@ assign FB_STRIDE      = fb_stride;
 assign FB_FORCE_BLANK = fb_off;
 
 reg f60;
-always @(posedge clk_sys) f60 <= fb_en || (fb_width > 700);
+always @(posedge clk_sys) f60 <= fb_en || (fb_width > 760);
 
 assign DDRAM_ADDR[28:25] = 4'h3;
 
@@ -589,21 +616,23 @@ system system
 	.clk_sys              (clk_sys),
 	.clk_opl              (clk_opl),
 	.clk_uart             (clk_uart),
+	.clk_vga              (clk_vga),
 
 	.reset_sys            (sys_reset),
 	.reset_cpu            (cpu_reset),
 
 	.clock_rate           (cur_rate),
 
-	.video_ce             (CE_PIXEL),
+	.video_ce             (vga_ce),
 	.video_f60            (~status[4] | f60),
-	.video_blank_n        (de),
+	.video_blank_n        (vga_de),
 	.video_hsync          (HSync),
 	.video_vsync          (VSync),
 	.video_r              (r),
 	.video_g              (g),
 	.video_b              (b),
 
+	.clock_rate_vga       (90000000),
 	.video_pal_a          (vga_pal_a),
 	.video_pal_d          (vga_pal_d),
 	.video_pal_we         (vga_pal_we),
@@ -614,6 +643,7 @@ system system
 	.video_flags          (vga_flags),
 	.video_off            (vga_off),
 	.video_fb_en          (fb_en),
+	.video_lores          (vga_lores),
 
 	.sound_sample_l       (sb_out_l),
 	.sound_sample_r       (sb_out_r),
